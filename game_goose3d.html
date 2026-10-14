@@ -1,0 +1,1448 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HONK HEIST 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream: #FFF6E5; --ink: #2B2A33; --muted: #6E6A7C; --pink: #FF8FB1; --pinkd: #E05A8A;
+    --yellow: #FFD25E; --mint: #BFE8C5; --sky: #8FD3F4; --lilac: #C7A3FF; --panel: #FFF1F5; --card: #FFFFFF;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--cream); color: var(--ink);
+    font: 14px/1.4 Fredoka, "Comic Sans MS", system-ui, sans-serif; }
+  .app { display: grid; grid-template-columns: 1fr 300px; height: 100vh; }
+  main { position: relative; overflow: hidden; background: #AEDDB6; }
+  #view, #fx, #hud { position: absolute; inset: 0; }
+  #fx, #hud { pointer-events: none; overflow: hidden; }
+  aside { background: var(--panel); border-left: 3px solid var(--ink); overflow-y: auto; padding: 14px; }
+  aside h1 { font-size: 22px; margin: 0; letter-spacing: .5px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  section { background: var(--card); border: 2.5px solid var(--ink); border-radius: 14px; padding: 10px 12px;
+    margin-bottom: 12px; box-shadow: 3px 3px 0 var(--ink); }
+  section h2 { font-size: 14px; margin: 0 0 8px; font-weight: 700; }
+  button { font: 600 14px Fredoka, "Comic Sans MS", sans-serif; color: var(--ink); background: var(--yellow);
+    border: 2.5px solid var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer; box-shadow: 2px 2px 0 var(--ink); }
+  button:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--ink); }
+  button:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
+  button.pink { background: var(--pink); }
+  .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+  .row:last-child { margin-bottom: 0; }
+  label { color: var(--muted); }
+  input[type=number] { font: 500 14px Fredoka, sans-serif; width: 58px; padding: 3px 6px; border: 2px solid var(--ink);
+    border-radius: 8px; background: var(--cream); color: var(--ink); }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .tile { background: var(--cream); border: 2px solid var(--ink); border-radius: 10px; padding: 4px 6px; }
+  .tile .k { color: var(--muted); font-size: 12px; }
+  .tile .v { font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #c9c3d6; display: inline-block; border: 2px solid var(--ink); }
+  .dot.on { background: #6BD38A; }
+  .note { color: var(--muted); font-size: 12.5px; }
+  .msg { font-size: 13px; padding: 6px 8px; border-radius: 10px; margin-top: 6px; display: none; border: 2px solid var(--ink); }
+  .msg.show { display: block; }
+  .msg.warn { background: #FFF0C2; }
+  .msg.bad { background: #FFD3DE; }
+  .msg.ok { background: #D7F5DE; }
+  kbd { background: var(--cream); border: 2px solid var(--ink); border-radius: 6px; padding: 0 5px; font: 600 12px Fredoka, sans-serif; }
+
+  /* floating text + speech bubbles over the 3D view */
+  .pop { position: absolute; left: 0; top: 0; white-space: nowrap; font: 700 22px Fredoka, "Comic Sans MS", sans-serif;
+    -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; transform-origin: center; will-change: transform; }
+  .pop.pill { -webkit-text-stroke: 0; color: var(--ink) !important; background: #fff; border: 2.5px solid var(--ink);
+    border-radius: 14px; padding: 4px 12px 5px; box-shadow: 3px 3px 0 var(--ink); text-align: center; line-height: 1.15; }
+  .pop.pill b { display: block; font-size: 19px; }
+  .pop.pill span { display: block; font: 500 14px Fredoka, sans-serif; color: var(--muted); }
+  .bubble { position: absolute; left: 0; top: 0; white-space: nowrap; background: #fff; border: 2.5px solid var(--ink);
+    border-radius: 12px; padding: 3px 10px; font: 600 15px Fredoka, sans-serif; will-change: transform; }
+  .bubble::after { content: ""; position: absolute; left: 50%; bottom: -9px; width: 12px; height: 12px; background: #fff;
+    border-right: 2.5px solid var(--ink); border-bottom: 2.5px solid var(--ink); transform: translateX(-50%) rotate(45deg); }
+  .bang { position: absolute; left: 0; top: 0; font: 700 38px Fredoka, sans-serif; color: var(--yellow);
+    -webkit-text-stroke: 6px var(--ink); paint-order: stroke fill; will-change: transform; }
+
+  /* HUD stickers */
+  #hud.hidden { display: none; }
+  .sticker { position: absolute; top: 16px; padding: 6px 18px; border: 3px solid var(--ink); border-radius: 16px;
+    background: #fff; box-shadow: 4px 4px 0 var(--ink); font: 700 26px Fredoka, sans-serif; transform: rotate(-2deg); }
+  #hLoot { left: 16px; background: var(--yellow); min-width: 180px; }
+  #hClock { left: 216px; min-width: 100px; text-align: center; }
+  #hClock.late { background: var(--pink); }
+  #hHonk { right: 16px; font-size: 22px; min-width: 190px; text-align: center; background: var(--pink); overflow: hidden; }
+  #hHonk.wait { background: #EDEAF2; }
+  #hHonkBar { position: absolute; left: 0; bottom: 0; height: 6px; background: var(--pinkd); width: 0; }
+  #hInput { position: absolute; right: 16px; bottom: 16px; width: 214px; height: 100px; background: rgba(255,246,229,.94);
+    border: 3px solid var(--ink); border-radius: 18px; box-shadow: 4px 4px 0 var(--ink); }
+  #hRing { position: absolute; left: 14px; top: 14px; width: 70px; height: 70px; border: 2.5px solid var(--ink); border-radius: 50%; }
+  #hDot { position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%;
+    background: var(--pink); border: 2.5px solid var(--ink); }
+  #hSneakBox { position: absolute; left: 100px; top: 18px; width: 96px; height: 16px; border: 2.5px solid var(--ink); border-radius: 8px; background: #EDEAF2; overflow: hidden; }
+  #hSneak { height: 100%; width: 0; background: var(--lilac); }
+  #hTxt1, #hTxt2 { position: absolute; left: 100px; font: 600 14px Fredoka, sans-serif; }
+  #hTxt1 { top: 42px; } #hTxt2 { top: 66px; }
+  #hPause { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(43,42,51,.35);
+    font: 700 40px Fredoka, sans-serif; color: #fff; -webkit-text-stroke: 6px var(--ink); paint-order: stroke fill; }
+
+  #overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(43, 42, 51, .3); }
+  #overlay.hidden { display: none; }
+  .card { background: var(--cream); border: 3px solid var(--ink); border-radius: 22px; padding: 24px 28px 22px;
+    max-width: 600px; width: calc(100% - 32px); box-shadow: 8px 8px 0 var(--ink); }
+  .title { font: 700 64px/0.95 Fredoka, "Comic Sans MS", sans-serif; margin: 0; color: var(--pink);
+    -webkit-text-stroke: 3px var(--ink); text-shadow: 5px 5px 0 var(--ink); transform: rotate(-3deg); display: inline-block; }
+  .title small { font-size: 34px; color: var(--yellow); }
+  .tag { font-size: 17px; color: var(--muted); margin: 10px 0 16px; }
+  .map { width: 100%; border-collapse: separate; border-spacing: 0 8px; font-size: 16px; margin-bottom: 8px; }
+  .map td { padding: 8px 10px; background: #fff; border-top: 2.5px solid var(--ink); border-bottom: 2.5px solid var(--ink); vertical-align: middle; }
+  .map td:first-child { border-left: 2.5px solid var(--ink); border-radius: 12px 0 0 12px; font-size: 26px; text-align: center; width: 54px; }
+  .map td:nth-child(2) { font-weight: 700; white-space: nowrap; }
+  .map td:last-child { border-right: 2.5px solid var(--ink); border-radius: 0 12px 12px 0; color: var(--muted); }
+  .goal { font-size: 15px; margin: 6px 0 16px; }
+  .big { font: 700 56px/1 Fredoka, sans-serif; color: var(--yellow); -webkit-text-stroke: 2.5px var(--ink); text-shadow: 4px 4px 0 var(--ink); }
+  .rank { font-size: 22px; font-weight: 700; margin: 10px 0 2px; }
+  .actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .actions button { font-size: 19px; padding: 9px 22px; }
+  @media (max-width: 880px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: 64vh auto; height: auto; }
+    aside { border-left: 0; border-top: 3px solid var(--ink); padding: 12px 16px; }
+    .title { font-size: 46px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+<main>
+  <div id="view"></div>
+  <div id="fx"></div>
+  <div id="hud" class="hidden">
+    <div class="sticker" id="hLoot">LOOT 0</div>
+    <div class="sticker" id="hClock">2:00</div>
+    <div class="sticker" id="hHonk">HONK READY<div id="hHonkBar"></div></div>
+    <div id="hInput"><div id="hRing"><div id="hDot"></div></div><div id="hSneakBox"><div id="hSneak"></div></div>
+      <div id="hTxt1">sneak</div><div id="hTxt2"></div></div>
+    <div id="hPause">paused. the goose is plotting.</div>
+  </div>
+  <div id="overlay"><div class="card" id="card"></div></div>
+</main>
+
+<aside>
+  <h1>HONK HEIST 3D 🪿</h1>
+  <div class="sub">a goose game for a squishy magnetic force sensor, now with an extra dimension of crime</div>
+
+  <section>
+    <h2>1 · Plug in the squishy thing</h2>
+    <div class="row">
+      <button id="btnConnect" class="pink">Connect sensor</button>
+      <span><span id="dot" class="dot"></span> <span id="connText">keyboard mode</span></span>
+      <span class="note" id="rate"></span>
+    </div>
+    <div class="note" id="chipInfo"></div>
+    <div id="msgConn" class="msg"></div>
+  </section>
+
+  <section>
+    <h2>2 · Zero &amp; directions</h2>
+    <div class="note" id="calibInfo"></div>
+    <div class="row" style="margin-top:6px">
+      <button id="btnZero">Zero (hands off!)</button>
+      <label><input id="polUp" type="checkbox" checked> N-pole up</label>
+    </div>
+    <div class="row">
+      <button id="btnFlipX">Flip X</button>
+      <button id="btnFlipY">Flip Y</button>
+      <span class="note" id="axisInfo"></span>
+    </div>
+    <div class="note">Keep the sensor base <b>still</b> — tilting it rotates Earth's field and the goose wanders off. Moved it? Hands off and press <kbd>Z</kbd> to re-zero.</div>
+    <div class="note" style="margin-top:4px">Press the dome: <b>Fz</b> should go <b>negative</b>. If not, toggle "N-pole up".</div>
+    <div id="msgCal" class="msg"></div>
+  </section>
+
+  <section>
+    <h2>Force (N)</h2>
+    <div class="grid3">
+      <div class="tile"><div class="k">Fx</div><div class="v" id="ofx">–</div></div>
+      <div class="tile"><div class="k">Fy</div><div class="v" id="ofy">–</div></div>
+      <div class="tile"><div class="k">Fz</div><div class="v" id="ofz">–</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Feel</h2>
+    <div class="row"><label>push for full waddle</label><input id="fxyMax" type="number" value="0.6" step="0.1" min="0.05"><label>N</label></div>
+    <div class="row"><label>press for full sneak</label><input id="fzMax" type="number" value="2.0" step="0.1" min="0.1"><label>N</label></div>
+    <div class="row"><label>squish to HONK</label><input id="fHonk" type="number" value="3.0" step="0.1" min="0.2"><label>N</label></div>
+    <div class="row"><label>k shear</label><input id="kxy" type="number" value="0.5" step="0.1" min="0.01"><label>k normal</label><input id="kz" type="number" value="1.6" step="0.1" min="0.01"></div>
+    <div class="row"><label><input id="sound" type="checkbox" checked> sound (honks are loud)</label></div>
+  </section>
+
+  <section>
+    <h2>Keyboard (no sensor)</h2>
+    <div class="note"><kbd>WASD</kbd>/<kbd>arrows</kbd> waddle · <kbd>Shift</kbd> sneak · <kbd>Space</kbd> HONK · <kbd>Z</kbd> re-zero sensor · <kbd>Enter</kbd> start · <kbd>P</kbd> pause</div>
+  </section>
+</aside>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script>
+"use strict";
+
+// The magnet pose solver is copied verbatim from magnet_viz.html so all pages
+// compute the same displacement — keep them in sync.
+// === SOLVER BEGIN ===
+// Units: position in mm, field in µT. Magnetic moment expressed as
+// M = 1e8 * m[A·m²]  so that  B[µT] = M * (3 r̂ (r̂·u) − u) / r[mm]^3.
+const Solver = (() => {
+  function dipoleB(p, u, M) {
+    // Sensor at origin, magnet centre at p, unit moment direction u.
+    const rx = -p[0], ry = -p[1], rz = -p[2];
+    const r2 = rx * rx + ry * ry + rz * rz, r = Math.sqrt(r2), k = M / (r2 * r);
+    const nx = rx / r, ny = ry / r, nz = rz / r;
+    const d = nx * u[0] + ny * u[1] + nz * u[2];
+    return [k * (3 * nx * d - u[0]), k * (3 * ny * d - u[1]), k * (3 * nz * d - u[2])];
+  }
+
+  // Moment direction from two tilt parameters (a, b): u = pol * normalize(a, b, 1).
+  function dirFromAB(a, b, pol) {
+    const n = Math.sqrt(a * a + b * b + 1);
+    return [pol * a / n, pol * b / n, pol / n];
+  }
+
+  // Each mode maps its parameter vector x to a pose {p, u}.
+  // x[...height] is always stored positive; `side` chooses above/below the sensor.
+  const MODES = {
+    pos:  { n: 3, pose: (x, c) => ({ p: [x[0], x[1], c.side * x[2]], u: [0, 0, c.pol] }),
+            lo: [-300, -300, 1], hi: [300, 300, 400] },
+    tilt: { n: 3, pose: (x, c) => ({ p: [0, 0, c.side * x[0]], u: dirFromAB(x[1], x[2], c.pol) }),
+            lo: [1, -6, -6], hi: [400, 6, 6] },
+    full: { n: 5, pose: (x, c) => ({ p: [x[0], x[1], c.side * x[2]], u: dirFromAB(x[3], x[4], c.pol) }),
+            lo: [-300, -300, 1, -6, -6], hi: [300, 300, 400, 6, 6] },
+  };
+
+  function restParams(mode, h) {
+    return mode === 'pos' ? [0, 0, h] : mode === 'tilt' ? [h, 0, 0] : [0, 0, h, 0, 0];
+  }
+
+  // Residual: relative field error (3 entries) + optional prior terms (full mode).
+  function residual(x, mode, Bm, c) {
+    const { p, u } = MODES[mode].pose(x, c);
+    const B = dipoleB(p, u, c.M);
+    const s = 1 / (Math.hypot(Bm[0], Bm[1], Bm[2]) + 1);
+    const r = [(B[0] - Bm[0]) * s, (B[1] - Bm[1]) * s, (B[2] - Bm[2]) * s];
+    if (mode === 'full' && c.reg > 0) {
+      const x0 = restParams('full', c.h), sc = [c.h, c.h, c.h, 1, 1];
+      for (let i = 0; i < 5; i++) r.push(c.reg * (x[i] - x0[i]) / sc[i]);
+    }
+    return r;
+  }
+
+  function solveLinear(A, b) {
+    const n = b.length, M = A.map((row, i) => [...row, b[i]]);
+    for (let c = 0; c < n; c++) {
+      let piv = c;
+      for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[piv][c])) piv = r;
+      if (Math.abs(M[piv][c]) < 1e-300) return null;
+      [M[c], M[piv]] = [M[piv], M[c]];
+      for (let r = c + 1; r < n; r++) {
+        const f = M[r][c] / M[c][c];
+        for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k];
+      }
+    }
+    const x = new Array(n);
+    for (let i = n - 1; i >= 0; i--) {
+      let s = M[i][n];
+      for (let k = i + 1; k < n; k++) s -= M[i][k] * x[k];
+      x[i] = s / M[i][i];
+    }
+    return x;
+  }
+
+  const sq = (r) => r.reduce((s, v) => s + v * v, 0);
+
+  // Levenberg–Marquardt with numerical Jacobian and box constraints.
+  function lm(x0, mode, Bm, c, iters = 40) {
+    const { n, lo, hi } = MODES[mode];
+    const clamp = (x) => x.map((v, i) => Math.min(hi[i], Math.max(lo[i], v)));
+    let x = clamp(x0.slice()), r = residual(x, mode, Bm, c), cost = sq(r), lambda = 1e-3;
+    for (let it = 0; it < iters; it++) {
+      const m = r.length, J = [];
+      for (let j = 0; j < n; j++) {
+        const h = 1e-5 * Math.max(1, Math.abs(x[j]));
+        const xp = x.slice(); xp[j] += h;
+        const xm = x.slice(); xm[j] -= h;
+        const rp = residual(xp, mode, Bm, c), rm = residual(xm, mode, Bm, c);
+        J.push(rp.map((v, i) => (v - rm[i]) / (2 * h)));   // J[j][i] = dr_i/dx_j
+      }
+      const A = [], g = [];
+      for (let a = 0; a < n; a++) {
+        A.push([]);
+        let s = 0;
+        for (let i = 0; i < m; i++) s += J[a][i] * r[i];
+        g.push(-s);
+        for (let b = 0; b < n; b++) {
+          let t = 0;
+          for (let i = 0; i < m; i++) t += J[a][i] * J[b][i];
+          A[a].push(t);
+        }
+      }
+      let improved = false, step = 0;
+      while (lambda < 1e10) {
+        const Ad = A.map((row, i) => row.map((v, j) => (i === j ? v * (1 + lambda) + 1e-12 : v)));
+        const dx = solveLinear(Ad, g);
+        if (!dx) { lambda *= 10; continue; }
+        const xn = clamp(x.map((v, i) => v + dx[i]));
+        const rn = residual(xn, mode, Bm, c), cn = sq(rn);
+        if (cn < cost) {
+          step = Math.max(...xn.map((v, i) => Math.abs(v - x[i])));
+          x = xn; r = rn; cost = cn; lambda = Math.max(lambda / 3, 1e-9); improved = true;
+          break;
+        }
+        lambda *= 4;
+      }
+      if (!improved || step < 1e-6) break;
+    }
+    return { x, cost, fieldErr: Math.sqrt(sq(r.slice(0, 3))) };
+  }
+
+  function seeds(mode, h) {
+    const zs = [0.5, 0.8, 1, 1.4, 2, 3].map((f) => f * h), out = [];
+    const t = [-1.2, 0, 1.2];
+    for (const z of zs) {
+      if (mode === 'pos') for (const a of [-1, 0, 1]) for (const b of [-1, 0, 1]) out.push([a * h, b * h, z]);
+      else if (mode === 'tilt') for (const a of t) for (const b of t) out.push([z, a, b]);
+      else for (const a of [-1, 0, 1]) for (const b of [-1, 0, 1]) {
+        out.push([a * h, b * h, z, 0, 0]);
+        out.push([0, 0, z, a, b]);
+      }
+    }
+    return out;
+  }
+
+  // Track from the previous solution. A global multi-start search runs only when
+  // tracking is clearly lost, and its answer replaces the tracked one only if it
+  // fits much better — otherwise noise would make the pose hop between distant
+  // solutions with similar error.
+  function solve(prev, mode, Bm, c) {
+    const track = prev ? lm(prev, mode, Bm, c) : null;
+    let best = track;
+    if (!track || track.fieldErr > 0.08) {
+      let g = null;
+      for (const s of seeds(mode, c.h)) {
+        const r = lm(s, mode, Bm, c, 25);
+        if (!g || r.cost < g.cost) g = r;
+      }
+      g = lm(g.x, mode, Bm, c, 60);
+      if (!track || g.fieldErr < 0.6 * track.fieldErr) best = g;
+    }
+    const pose = MODES[mode].pose(best.x, c);
+    return { ...best, ...pose };
+  }
+
+  return { dipoleB, dirFromAB, MODES, restParams, residual, lm, solve };
+})();
+// === SOLVER END ===
+
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+// ===========================================================================
+// Sensor: serial → background-corrected field → magnet position → force
+// ===========================================================================
+const Sen = {
+  port: null, reader: null, connected: false,
+  bg: null, filt: null, sat: false,
+  M: momentFromDims(2, 1, 1.17), pol: 1, h: 13.6, side: 1,
+  axisMap: { ix: 0, sx: 1, iy: 1, sy: 1 },
+  fromViewer: false,
+  x: null, p: null, p0: null, F: [0, 0, 0], ok: false,
+  collect: null, count: 0, rate: 0, lastRateT: performance.now(), firstDataT: 0, autoZeroed: false,
+};
+
+function momentFromDims(d, t, Br) {
+  const V = Math.PI * (d / 2) ** 2 * t * 1e-9;
+  return 1e8 * Br * V / (4 * Math.PI * 1e-7);       // µT·mm³ (same units as the viewer)
+}
+
+function loadStored() {
+  try {
+    const a = JSON.parse(localStorage.getItem('gy271AxisMap'));
+    if (a && [0, 1].includes(a.ix) && [0, 1].includes(a.iy) && a.ix !== a.iy) Sen.axisMap = a;
+  } catch {}
+  try {
+    const c = JSON.parse(localStorage.getItem('gy271Calib'));
+    if (c && c.M > 0 && Array.isArray(c.bg)) {
+      Sen.M = c.M; Sen.pol = c.pol || 1; Sen.h = c.h || 13.6; Sen.side = c.side || 1;
+      Sen.bg = c.bg; Sen.fromViewer = true;
+      if (c.kxy) $('kxy').value = c.kxy;
+      if (c.kz) $('kz').value = c.kz;
+    }
+  } catch {}
+  $('polUp').checked = Sen.pol > 0;
+  $('calibInfo').textContent = Sen.fromViewer
+    ? `Using the viewer's calibration (magnet ${Sen.h} mm above the chip).`
+    : 'No viewer calibration found — using defaults (Ø2×1 N35, 13.6 mm). After connecting, keep your hands off: it zeroes itself.';
+  updateAxisInfo();
+}
+
+function updateAxisInfo() {
+  const m = Sen.axisMap, n = ['X', 'Y'];
+  $('axisInfo').textContent = `X=${m.sx > 0 ? '+' : '−'}${n[m.ix]}, Y=${m.sy > 0 ? '+' : '−'}${n[m.iy]}`;
+}
+function saveAxisMap() { try { localStorage.setItem('gy271AxisMap', JSON.stringify(Sen.axisMap)); } catch {} }
+
+const mapAxes = (v) => [Sen.axisMap.sx * v[Sen.axisMap.ix], Sen.axisMap.sy * v[Sen.axisMap.iy], v[2]];
+
+function setMsg(id, cls, text) {
+  const el = $(id);
+  el.className = 'msg' + (text ? ' show ' + cls : '');
+  el.textContent = text || '';
+}
+
+function onSample(b, sat) {
+  Sen.sat = sat; Sen.count++;
+  if (!Sen.firstDataT) Sen.firstDataT = performance.now();
+  if (Sen.collect) {
+    const c = Sen.collect;
+    for (let i = 0; i < 3; i++) c.sum[i] += b[i];
+    if (++c.n >= c.N) { Sen.collect = null; c.done(c.sum.map((v) => v / c.N)); }
+  }
+  if (!Sen.bg) return;
+  const Bc = mapAxes([b[0] - Sen.bg[0], b[1] - Sen.bg[1], b[2] - Sen.bg[2]]);
+  Sen.filt = Sen.filt ? Sen.filt.map((v, i) => v + 0.4 * (Bc[i] - v)) : Bc;
+}
+
+// Zero with the magnet at rest and no load: whatever the reading holds beyond the
+// dipole field of the rest pose is background (Earth field + offsets).
+async function zero() {
+  if (!Sen.connected) return setMsg('msgCal', 'bad', 'Connect the sensor first.');
+  if (Sen.collect) return;
+  setMsg('msgCal', 'warn', 'Zeroing… hands off the dome!');
+  const mean = await new Promise((done) => { Sen.collect = { N: 60, n: 0, sum: [0, 0, 0], done }; });
+  Sen.pol = $('polUp').checked ? 1 : -1;
+  const Bm = Solver.dipoleB([0, 0, Sen.side * Sen.h], [0, 0, Sen.pol], Sen.M);
+  const Bs = [0, 0, Bm[2]];                              // model axes → sensor axes
+  Bs[Sen.axisMap.ix] = Sen.axisMap.sx * Bm[0];
+  Bs[Sen.axisMap.iy] = Sen.axisMap.sy * Bm[1];
+  Sen.bg = mean.map((v, i) => v - Bs[i]);
+  Sen.filt = null; Sen.x = null; Sen.p0 = null; Sen.autoZeroed = true;
+  setMsg('msgCal', 'ok', 'Zeroed. Give the dome a squish!');
+}
+
+function updateSensor() {
+  Sen.ok = false;
+  if (!Sen.connected || !Sen.filt || !Sen.bg) return;
+  const c = { M: Sen.M, pol: Sen.pol, side: Sen.side, h: Sen.h, reg: 0 };
+  const sol = Solver.solve(Sen.x, 'pos', Sen.filt, c);
+  if (sol.fieldErr > 0.3 || Sen.sat) return;            // keep the last force
+  Sen.x = sol.x; Sen.p = sol.p;
+  const p0 = Sen.p0 || [0, 0, Sen.side * Sen.h];
+  const kxy = +$('kxy').value, kz = +$('kz').value;
+  Sen.F = [kxy * (sol.p[0] - p0[0]), kxy * (sol.p[1] - p0[1]), kz * (sol.p[2] - p0[2])];
+  Sen.ok = true;
+}
+
+// ---------------- serial (Web Serial, Chrome / Edge) ----------------
+async function connect() {
+  if (Sen.connected) return disconnect();
+  if (!('serial' in navigator)) return setMsg('msgConn', 'bad', 'This browser has no Web Serial. Use Chrome or Edge.');
+  try {
+    const port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+    // ESP32-S3 native USB: release DTR, then RTS, so the chip runs the firmware (not download mode)
+    try { await port.setSignals({ dataTerminalReady: false }); await port.setSignals({ requestToSend: false }); } catch {}
+    Sen.port = port; Sen.connected = true; Sen.firstDataT = 0; Sen.autoZeroed = false;
+    $('dot').className = 'dot on'; $('connText').textContent = 'sensor connected';
+    $('btnConnect').textContent = 'Disconnect';
+    setMsg('msgConn', 'warn', 'Hands off the dome for a sec — zeroing…');
+    readLoop(port);
+    setTimeout(() => sendCmd('i\n'), 1200);
+  } catch (e) {
+    setMsg('msgConn', 'bad', e.message);
+  }
+}
+
+async function sendCmd(s) {
+  if (!Sen.port?.writable) return;
+  const w = Sen.port.writable.getWriter();
+  try { await w.write(new TextEncoder().encode(s)); } finally { w.releaseLock(); }
+}
+
+async function readLoop(port) {
+  const dec = new TextDecoder();
+  let buf = '';
+  while (port.readable && Sen.connected) {
+    Sen.reader = port.readable.getReader();
+    try {
+      for (;;) {
+        const { value, done } = await Sen.reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let i;
+        while ((i = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, i).trim();
+          buf = buf.slice(i + 1);
+          if (line.startsWith('B,')) {
+            const f = line.split(',');
+            const b = [+f[2], +f[3], +f[4]];
+            if (f.length >= 6 && !b.some(Number.isNaN)) onSample(b, f[5] === '1');
+          } else if (line.startsWith('# chip=')) {
+            $('chipInfo').textContent = line.slice(2);
+          }
+        }
+      }
+    } catch (e) {
+      setMsg('msgConn', 'bad', e.message);
+    } finally {
+      Sen.reader.releaseLock();
+    }
+  }
+}
+
+async function disconnect() {
+  Sen.connected = false;
+  try { await Sen.reader?.cancel(); } catch {}
+  try { await Sen.port?.close(); } catch {}
+  Sen.port = null; Sen.filt = null;
+  $('dot').className = 'dot'; $('connText').textContent = 'keyboard mode';
+  $('btnConnect').textContent = 'Connect sensor';
+  setMsg('msgConn');
+}
+
+// ===========================================================================
+// Input: forces (or keyboard) → goose controls
+//   shear Fx, Fy        → sx, sy ∈ [−1, 1]   waddle
+//   gentle press (−Fz)  → sneak ∈ [0, 1]     crouch: slower, harder to spot
+//   hard squish         → HONK (rising edge)
+// ===========================================================================
+const keys = new Set();
+const kb = { sx: 0, sy: 0, sneak: 0 };
+const In = { sx: 0, sy: 0, sneak: 0, pressN: 0, honk: false, honkHeld: false, source: 'keyboard' };
+
+function shape(v) {                       // dead zone, then rescale to keep the full range
+  const dz = 0.08, a = Math.abs(v);
+  return a < dz ? 0 : Math.sign(v) * Math.min(1, (a - dz) / (1 - dz));
+}
+
+function readInput(dt) {
+  const k = 1 - Math.exp(-dt * 10);
+  const kx = (keys.has('ArrowRight') || keys.has('KeyD') ? 1 : 0) - (keys.has('ArrowLeft') || keys.has('KeyA') ? 1 : 0);
+  const ky = (keys.has('ArrowUp') || keys.has('KeyW') ? 1 : 0) - (keys.has('ArrowDown') || keys.has('KeyS') ? 1 : 0);
+  kb.sx += k * (kx - kb.sx); kb.sy += k * (ky - kb.sy);
+  kb.sneak += k * ((keys.has('ShiftLeft') || keys.has('ShiftRight') ? 1 : 0) - kb.sneak);
+  let sx = kb.sx, sy = kb.sy, sneak = kb.sneak, honkHeld = keys.has('Space');
+  In.source = 'keyboard'; In.pressN = 0;
+
+  if (Sen.connected && Sen.bg && Sen.autoZeroed) {
+    const [Fx, Fy, Fz] = Sen.F;
+    const pN = -Fz * Sen.side;            // pressing moves the magnet toward the chip
+    const fxy = +$('fxyMax').value, fz = +$('fzMax').value;
+    const ssx = shape(Fx / fxy), ssy = shape(Fy / fxy);
+    sx = Math.abs(ssx) > Math.abs(sx) ? ssx : sx;
+    sy = Math.abs(ssy) > Math.abs(sy) ? ssy : sy;
+    sneak = Math.max(sneak, clamp((pN - 0.08 * fz) / fz, 0, 1));
+    honkHeld = honkHeld || pN > +$('fHonk').value;
+    In.source = 'sensor'; In.pressN = pN;
+  }
+  const m = Math.hypot(sx, sy);
+  if (m > 1) { sx /= m; sy /= m; }
+  In.honk = honkHeld && !In.honkHeld;     // rising edge only
+  In.honkHeld = honkHeld;
+  In.sx = sx; In.sy = sy; In.sneak = clamp(sneak, 0, 1);
+}
+
+addEventListener('keydown', (e) => {
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+  if (e.target.tagName === 'INPUT') return;
+  keys.add(e.code);
+  if (e.code === 'Enter' && G.state !== 'play') startGame();
+  if (e.code === 'KeyP' && G.state === 'play') G.paused = !G.paused;
+  if (e.code === 'KeyZ' && Sen.connected) zero();
+});
+addEventListener('keyup', (e) => keys.delete(e.code));
+addEventListener('blur', () => keys.clear());
+
+// ===========================================================================
+// Sound (tiny Web Audio synth — no files)
+// ===========================================================================
+let AC = null;
+function audio() {
+  if (!$('sound').checked) return null;
+  if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch { return null; } }
+  if (AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function tone(type, f0, f1, dur, vol, delay = 0) {
+  const a = audio(); if (!a) return;
+  const t = a.currentTime + delay, o = a.createOscillator(), g = a.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + dur + 0.02);
+}
+function sfxHonk() {
+  const a = audio(); if (!a) return;
+  const t = a.currentTime, f = a.createBiquadFilter(), g = a.createGain();
+  f.type = 'bandpass'; f.frequency.value = 1100; f.Q.value = 1.1;
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.5, t + 0.02);
+  g.gain.setValueAtTime(0.5, t + 0.18); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
+  for (const [type, f0, f1] of [['sawtooth', 430, 330], ['square', 215, 165], ['sawtooth', 436, 335]]) {
+    const o = a.createOscillator();
+    o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + 0.3);
+    o.connect(f); o.start(t); o.stop(t + 0.36);
+  }
+  f.connect(g); g.connect(a.destination);
+}
+const sfxPick = () => { tone('sine', 660, 1320, 0.12, 0.25); };
+const sfxBank = () => { [0, 0.08, 0.16].forEach((d, i) => tone('triangle', 520 * (1 + i * 0.26), 540 * (1 + i * 0.26), 0.14, 0.25, d)); };
+const sfxBonk = () => { tone('square', 180, 60, 0.25, 0.35); tone('sine', 900, 300, 0.4, 0.15, 0.1); };
+const sfxScream = () => { tone('triangle', 900, 420, 0.5, 0.12); };
+const sfxHuh = () => { tone('sine', 500, 760, 0.16, 0.15); };
+
+// ===========================================================================
+// Game logic (same rules as the 2D version). Ground coordinates are "park
+// pixels": x right, y toward the camera; 10 px = 1 three.js unit.
+// ===========================================================================
+const WW = 1200, WH = 760;
+const POND = { x: 150, y: 640, rx: 150, ry: 105 };
+const NEST = { x: 210, y: 600, r: 46 };
+const BLANKETS = [
+  { x: 520, y: 150, w: 190, h: 120, rot: -0.06, color: '#FF8FB1' },
+  { x: 960, y: 250, w: 170, h: 130, rot: 0.08, color: '#8FD3F4' },
+  { x: 780, y: 590, w: 200, h: 120, rot: -0.04, color: '#FFD25E' },
+];
+const BUSHES = [
+  { x: 330, y: 330, r: 52 }, { x: 640, y: 400, r: 44 }, { x: 1080, y: 520, r: 50 },
+  { x: 900, y: 80, r: 40 }, { x: 420, y: 650, r: 40 },
+];
+const ITEMS = [
+  { e: '🥖', name: 'Baguette', pts: 10, quip: 'a carb-based weapon' },
+  { e: '🍰', name: 'Birthday cake', pts: 25, quip: "it WAS someone's birthday" },
+  { e: '📱', name: 'Phone', pts: 20, quip: '17 unread texts' },
+  { e: '👟', name: 'One shoe', pts: 15, quip: 'just the one' },
+  { e: '🦆', name: 'Rubber duck', pts: 30, quip: 'a respected colleague' },
+  { e: '🍉', name: 'Watermelon', pts: 20, quip: 'heavy. worth it.' },
+  { e: '🧀', name: 'Cheese', pts: 15, quip: 'smells like victory' },
+  { e: '🧸', name: 'Teddy', pts: 20, quip: 'emotional support bear' },
+  { e: '🥪', name: 'Sandwich', pts: 10, quip: 'Gerald made that' },
+];
+const PEOPLE = [
+  { name: 'Gerald', shirt: '#8FD3F4', hat: 'cap' }, { name: 'Brenda', shirt: '#FF8FB1', hat: 'bow' },
+  { name: 'Kevin', shirt: '#FFD25E', hat: 'none' }, { name: 'Linda', shirt: '#C7A3FF', hat: 'sun' },
+];
+const LINES = {
+  notice: ['hey!', 'is that… a goose?', 'oh no. it\'s back.', 'Gerald, the GOOSE'],
+  chase: ['GET BACK HERE', 'that\'s my BAGUETTE', 'not today, bird', 'GIVE IT BACK'],
+  scared: ['AAAAAAA', 'it HONKED at me', 'I have a FAMILY', 'run, Brenda, RUN'],
+  caught: ['and STAY there', 'back to the pond, menace', 'gotcha, feather crime'],
+  giveup: ['ugh. birds.', 'I\'m too old for this', 'fine. FINE.'],
+};
+
+const G = {
+  state: 'menu', paused: false, time: 0, left: 120, score: 0, banked: [], honks: 0, bonks: 0, scared: 0, stolen: 0,
+  goose: null, humans: [], items: [], pops: [], waves: [], feathers: [], shake: 0, spawnT: 0,
+  best: (() => { try { return +localStorage.getItem('honkBest3d') || 0; } catch { return 0; } })(),
+};
+
+function makeGoose() {
+  return { x: NEST.x + 90, y: NEST.y - 60, vx: 0, vy: 0, face: 1, yaw: 0, phase: 0, sneak: 0, carry: [],
+    honkCd: 0, honkAnim: 0, yeet: null, inBush: false };
+}
+
+function makeHumans() {
+  return PEOPLE.slice(0, 4).map((p, i) => {
+    const b = BLANKETS[i % BLANKETS.length];
+    const home = { x: b.x + rand(-60, 60), y: b.y + b.h / 2 + 40 };
+    if (i === 3) { home.x = 600; home.y = 250; }
+    return { ...p, x: home.x, y: home.y, vx: 0, vy: 0, home, tx: home.x, ty: home.y,
+      state: 'wander', t: 0, lost: 0, phase: rand(0, 6), say: null, yaw: 0 };
+  });
+}
+
+function spawnItem() {
+  if (G.items.length >= 8) return;
+  const b = pick(BLANKETS), type = pick(ITEMS);
+  G.items.push({ x: b.x + rand(-b.w / 2 + 25, b.w / 2 - 25), y: b.y + rand(-b.h / 2 + 25, b.h / 2 - 25),
+    type, bob: rand(0, 6) });
+}
+
+function startGame() {
+  audio();
+  G.state = 'play'; G.paused = false; G.time = 0; G.left = 120; G.score = 0; G.banked = [];
+  G.honks = 0; G.bonks = 0; G.scared = 0; G.stolen = 0; G.pops = []; G.waves = []; G.feathers = []; G.items = [];
+  G.goose = makeGoose(); G.humans = makeHumans();
+  for (let i = 0; i < 6; i++) spawnItem();
+  $('overlay').classList.add('hidden');
+  $('hud').classList.remove('hidden');
+}
+
+function endGame() {
+  G.state = 'over';
+  if (G.score > G.best) { G.best = G.score; try { localStorage.setItem('honkBest3d', G.best); } catch {} }
+  showCard('over');
+}
+
+// pop(text) floats above ground point (x, y) at height h (three.js units);
+// with `sub` it is drawn as a white sticker: big title + small quip
+function pop(x, y, text, color = '#2B2A33', size = 22, h = 5, sub = '') { G.pops.push({ x, y, h, text, sub, color, size, t: 0 }); }
+function say(h, kind) { h.say = { text: pick(LINES[kind]), t: 2.2 }; }
+
+function updateGoose(dt) {
+  const g = G.goose;
+  g.sneak += (In.sneak - g.sneak) * (1 - Math.exp(-dt * 12));
+  if (g.yeet) {                               // flying back to the pond after a BONK
+    const y = g.yeet; y.t += dt;
+    const u = Math.min(1, y.t / y.dur);
+    g.x = y.x0 + (y.x1 - y.x0) * u; g.y = y.y0 + (y.y1 - y.y0) * u;
+    if (u >= 1) { g.yeet = null; g.vx = g.vy = 0; pop(g.x, g.y, 'splash.', '#3A7FB0', 20, 3); }
+    return;
+  }
+  const maxV = 250 * (1 - 0.6 * g.sneak) * (1 - 0.07 * g.carry.length);
+  const k = 1 - Math.exp(-dt * 9);
+  g.vx += (In.sx * maxV - g.vx) * k;
+  g.vy += (-In.sy * maxV - g.vy) * k;            // sensor +Y = away from the camera
+  g.x = clamp(g.x + g.vx * dt, 30, WW - 30);
+  g.y = clamp(g.y + g.vy * dt, 40, WH - 30);
+  const sp = Math.hypot(g.vx, g.vy);
+  if (sp > 15) {                                  // turn smoothly toward the walking direction
+    const target = Math.atan2(-g.vy, g.vx);
+    let d = target - g.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+    g.yaw += d * (1 - Math.exp(-dt * 12));
+  }
+  g.phase += sp * dt * 0.09;
+  g.inBush = BUSHES.some((b) => Math.hypot(g.x - b.x, g.y - b.y) < b.r * 0.8);
+  g.honkCd = Math.max(0, g.honkCd - dt); g.honkAnim = Math.max(0, g.honkAnim - dt);
+
+  for (const it of G.items) {                     // grab stuff
+    if (g.carry.length >= 5) break;
+    if (Math.hypot(it.x - g.x, it.y - g.y) < 42) {
+      it.gone = true; g.carry.push(it.type); G.stolen++;
+      pop(it.x, it.y, `${it.type.name}!`, '#2B2A33', 19, 4.5, it.type.quip);
+      sfxPick();
+      for (const h of G.humans) if (h.state === 'wander' && Math.hypot(h.x - g.x, h.y - g.y) < 260) { h.state = 'alert'; h.t = 0.5; say(h, 'chase'); sfxHuh(); }
+    }
+  }
+  G.items = G.items.filter((it) => !it.gone);
+
+  if (g.carry.length && Math.hypot(g.x - NEST.x, g.y - NEST.y) < NEST.r + 30) {   // bank it
+    const n = g.carry.length, base = g.carry.reduce((s, t) => s + t.pts, 0);
+    const pts = Math.round(base * (1 + 0.25 * (n - 1)));
+    G.score += pts; G.banked.push(...g.carry); g.carry = [];
+    pop(NEST.x, NEST.y, n > 1 ? `+${pts}  ×${n} COMBO!` : `+${pts}`, '#E05A8A', 30, 6);
+    sfxBank();
+  }
+
+  if (In.honk && g.honkCd <= 0) {                 // HONK
+    g.honkCd = 2.2; g.honkAnim = 0.45; G.honks++; G.shake = 0.25;
+    G.waves.push({ x: g.x, y: g.y, t: 0 });
+    pop(g.x, g.y, 'HONK!', '#FFD25E', 40, 8);
+    sfxHonk();
+    let n = 0;
+    for (const h of G.humans) {
+      if (Math.hypot(h.x - g.x, h.y - g.y) < 260 && h.state !== 'scared') { h.state = 'scared'; h.t = 3; say(h, 'scared'); n++; }
+    }
+    if (n) { G.score += 5 * n; G.scared += n; pop(g.x, g.y, `MAYHEM +${5 * n}`, '#E05A8A', 24, 12); setTimeout(sfxScream, 120); }
+  } else if (In.honk) {
+    pop(g.x, g.y, 'hnk…', '#EDEAF2', 18, 7);
+  }
+}
+
+function updateHumans(dt) {
+  const g = G.goose;
+  for (const h of G.humans) {
+    h.t -= dt; h.phase += dt * 8;
+    if (h.say) { h.say.t -= dt; if (h.say.t <= 0) h.say = null; }
+    const dx = g.x - h.x, dy = g.y - h.y, d = Math.hypot(dx, dy);
+    const sight = 200 * (1 - 0.7 * g.sneak) * (g.inBush ? 0.25 : 1) * (g.carry.length ? 1.2 : 1);
+    let speed = 0, tx = h.tx, ty = h.ty;
+
+    if (h.state === 'wander') {
+      speed = 55;
+      if (Math.hypot(h.tx - h.x, h.ty - h.y) < 8) { h.tx = h.home.x + rand(-120, 120); h.ty = h.home.y + rand(-70, 70); }
+      if (!g.yeet && d < sight && g.carry.length) { h.state = 'alert'; h.t = 0.6; say(h, 'notice'); sfxHuh(); }
+    } else if (h.state === 'alert') {
+      speed = 0;
+      if (h.t <= 0) h.state = 'chase';
+    } else if (h.state === 'chase') {
+      speed = 150 + 12 * g.carry.length; tx = g.x; ty = g.y;
+      if (!g.yeet && d < 34) {                  // BONK
+        G.bonks++; sfxBonk(); G.shake = 0.4;
+        pop(g.x, g.y, 'BONK.', '#FFFFFF', 38, 11.5);
+        say(h, 'caught');
+        for (const t of g.carry) { const b = pick(BLANKETS); G.items.push({ x: b.x + rand(-60, 60), y: b.y + rand(-35, 35), type: t, bob: 0 }); }
+        g.carry = [];
+        for (let i = 0; i < 10; i++) G.feathers.push({ x: g.x, y: g.y, h: 3, vx: rand(-120, 120), vy: rand(-120, 120), vh: rand(8, 18), t: 0, r: rand(0, 6) });
+        g.yeet = { t: 0, dur: 1.1, x0: g.x, y0: g.y, x1: POND.x + rand(-30, 30), y1: POND.y + rand(-10, 20) };
+        h.state = 'wander'; h.tx = h.home.x; h.ty = h.home.y;
+      } else if (d > sight * 1.8 || g.yeet || !g.carry.length) {
+        h.lost += dt;
+        if (h.lost > 1.2) { h.state = 'wander'; h.lost = 0; say(h, 'giveup'); h.tx = h.home.x; h.ty = h.home.y; }
+      } else h.lost = 0;
+    } else if (h.state === 'scared') {
+      speed = 200; tx = h.x - dx; ty = h.y - dy;
+      if (h.t <= 0) { h.state = 'wander'; h.tx = h.home.x; h.ty = h.home.y; }
+    }
+    const mx = tx - h.x, my = ty - h.y, m = Math.hypot(mx, my) || 1;
+    const vx = speed * mx / m, vy = speed * my / m;
+    h.vx += (vx - h.vx) * (1 - Math.exp(-dt * 8)); h.vy += (vy - h.vy) * (1 - Math.exp(-dt * 8));
+    h.x = clamp(h.x + h.vx * dt, 30, WW - 30); h.y = clamp(h.y + h.vy * dt, 40, WH - 30);
+    if (Math.hypot(h.vx, h.vy) > 8) {
+      const target = Math.atan2(-h.vy, h.vx);
+      let a = target - h.yaw; a = Math.atan2(Math.sin(a), Math.cos(a));
+      h.yaw += a * (1 - Math.exp(-dt * 10));
+    }
+  }
+}
+
+function update(dt) {
+  G.time += dt; G.left -= dt;
+  updateGoose(dt);
+  updateHumans(dt);
+  G.spawnT -= dt;
+  if (G.spawnT <= 0) { spawnItem(); G.spawnT = 3.5; }
+  for (const p of G.pops) p.t += dt;
+  G.pops = G.pops.filter((p) => p.t < 1.8);
+  for (const w of G.waves) w.t += dt;
+  G.waves = G.waves.filter((w) => w.t < 0.7);
+  for (const f of G.feathers) {
+    f.t += dt; f.x += f.vx * dt; f.y += f.vy * dt; f.h += f.vh * dt; f.vh -= 30 * dt;
+    f.vx *= 0.97; f.vy *= 0.97; f.r += dt * 5; if (f.h < 0.2) { f.h = 0.2; f.vh = 0; }
+  }
+  G.feathers = G.feathers.filter((f) => f.t < 1.6);
+  G.shake = Math.max(0, G.shake - dt);
+  if (G.left <= 0) endGame();
+}
+
+// ===========================================================================
+// 3D scene — toon shading, ink outlines (inverted hull), pastel everything
+// ===========================================================================
+const X = (x) => (x - WW / 2) / 10, Z = (y) => (y - WH / 2) / 10;
+const INK = 0x2B2A33;
+const host = $('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+host.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xAEDDB6);
+scene.fog = new THREE.Fog(0xAEDDB6, 95, 170);
+const camera = new THREE.PerspectiveCamera(38, 1, 1, 400);
+scene.add(new THREE.HemisphereLight(0xFFFFFF, 0xCFE9D2, 0.5));
+const sun = new THREE.DirectionalLight(0xFFFFFF, 0.5);
+sun.position.set(-30, 60, 40);
+scene.add(sun);
+
+const gradientMap = (() => {
+  const t = new THREE.DataTexture(new Uint8Array([150, 205, 255]), 3, 1, THREE.LuminanceFormat);
+  t.minFilter = t.magFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true;
+  return t;
+})();
+const matCache = new Map();
+function toonMat(color, own = false) {
+  if (!own && matCache.has(color)) return matCache.get(color);
+  const m = new THREE.MeshToonMaterial({ color, gradientMap });
+  if (!own) matCache.set(color, m);
+  return m;
+}
+const outlineMat = new THREE.MeshBasicMaterial({ color: INK, side: THREE.BackSide });
+
+const GEO = {
+  sphere: new THREE.SphereGeometry(1, 24, 16),
+  cyl: new THREE.CylinderGeometry(1, 1, 1, 20),
+  cone: new THREE.ConeGeometry(1, 1, 16),
+  box: new THREE.BoxGeometry(1, 1, 1),
+  disc: new THREE.CircleGeometry(1, 32).rotateX(-Math.PI / 2),
+};
+
+// A toon mesh plus a slightly larger back-face "ink" shell = cartoon outline.
+function part(parent, geo, color, { p = [0, 0, 0], s = [1, 1, 1], r = [0, 0, 0], ol = 0.08, mats = null } = {}) {
+  const g = new THREE.Group();
+  const mat = mats ? toonMat(color, true) : toonMat(color);
+  if (mats) mats.push(mat);
+  const m = new THREE.Mesh(geo, mat);
+  g.add(m);
+  if (ol) {
+    const o = new THREE.Mesh(geo, outlineMat);
+    o.scale.set(1 + ol / s[0], 1 + ol / s[1], 1 + ol / s[2]);
+    g.add(o);
+  }
+  g.position.set(...p); g.scale.set(...s); g.rotation.set(...r);
+  parent.add(g);
+  return g;
+}
+
+const shadowMat = new THREE.MeshBasicMaterial({ color: INK, transparent: true, opacity: 0.18, depthWrite: false });
+function blobShadow(parent, rx, rz) {
+  const m = new THREE.Mesh(GEO.disc, shadowMat);
+  m.scale.set(rx, 1, rz); m.position.y = 0.04; parent.add(m);
+  return m;
+}
+
+function canvasTex(w, h, draw) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c); t.anisotropy = 4;
+  return t;
+}
+
+// ---------------- stolen goods: little toon models (≈2.5 units, base at y = 0, facing +z) ----------------
+const TRI = new THREE.CylinderGeometry(1, 1, 1, 3);                         // triangular prism
+const HALF = new THREE.CylinderGeometry(1, 1, 1, 24, 1, false, 0, Math.PI); // half disc (x ≥ 0)
+const FOOD = {
+  Baguette(g) {
+    const b = new THREE.Group(); b.rotation.y = 0.5; g.add(b);
+    part(b, GEO.sphere, 0xE8B66A, { p: [0, 0.45, 0], s: [1.6, 0.42, 0.42] });
+    for (let i = -1; i <= 1; i++) part(b, GEO.box, 0xC98E3E, { p: [i * 0.75, 0.84, 0], s: [0.12, 0.06, 0.5], r: [0, 0.6, 0], ol: 0 });
+  },
+  'Birthday cake'(g) {
+    part(g, GEO.cyl, 0xFFF3D6, { p: [0, 0.42, 0], s: [1.05, 0.84, 1.05] });
+    part(g, GEO.cyl, 0xFF8FB1, { p: [0, 0.9, 0], s: [1.1, 0.24, 1.1] });
+    const sprinkle = [0x8FD3F4, 0xFFD25E, 0xC7A3FF, 0xFFFFFF, 0x7FCB8C, 0x8FD3F4];
+    sprinkle.forEach((c, i) => { const a = i * 1.05; part(g, GEO.box, c, { p: [Math.cos(a) * 0.7, 1.03, Math.sin(a) * 0.7], s: [0.2, 0.05, 0.06], r: [0, a, 0], ol: 0 }); });
+    part(g, GEO.sphere, 0xE03131, { p: [0, 1.2, 0], s: [0.22, 0.22, 0.22], ol: 0.08 });
+    part(g, GEO.cyl, 0x8FD3F4, { p: [0.4, 1.3, 0.25], s: [0.07, 0.55, 0.07], ol: 0.06 });
+    part(g, GEO.cone, 0xFFB347, { p: [0.4, 1.7, 0.25], s: [0.12, 0.26, 0.12], ol: 0.05 });
+  },
+  Phone(g) {
+    const b = new THREE.Group(); b.rotation.set(-0.35, 0.3, 0); b.position.y = 0.3; g.add(b);
+    part(b, GEO.box, 0x3A3946, { p: [0, 0, 0], s: [1.0, 0.16, 1.8] });
+    part(b, GEO.box, 0x8FD3F4, { p: [0, 0.09, 0], s: [0.84, 0.02, 1.5], ol: 0 });
+    const app = [0xFF8FB1, 0xFFD25E, 0x7FCB8C, 0xC7A3FF, 0xFFFFFF, 0xFF9A3C];
+    app.forEach((c, i) => part(b, GEO.box, c, { p: [-0.22 + (i % 2) * 0.44, 0.11, -0.45 + Math.floor(i / 2) * 0.42], s: [0.26, 0.02, 0.26], ol: 0 }));
+  },
+  'One shoe'(g) {
+    const b = new THREE.Group(); b.rotation.y = -0.4; g.add(b);
+    part(b, GEO.sphere, 0xFFFFFF, { p: [0, 0.22, 0], s: [1.25, 0.22, 0.55] });
+    part(b, GEO.sphere, 0xC7A3FF, { p: [-0.25, 0.62, 0], s: [0.95, 0.6, 0.5] });
+    part(b, GEO.sphere, 0xC7A3FF, { p: [0.55, 0.42, 0], s: [0.58, 0.38, 0.46] });
+    for (let i = 0; i < 3; i++) part(b, GEO.box, 0xFFFFFF, { p: [0.05 + i * 0.2, 0.98 - i * 0.12, 0], s: [0.06, 0.06, 0.34], ol: 0 });
+    part(b, GEO.box, 0xFF8FB1, { p: [-0.3, 0.6, 0.49], s: [0.6, 0.1, 0.02], r: [0, 0, 0.2], ol: 0 });
+  },
+  'Rubber duck'(g) {
+    const b = new THREE.Group(); b.rotation.y = -0.6; g.add(b);
+    part(b, GEO.sphere, 0xFFD25E, { p: [0, 0.7, 0], s: [0.95, 0.7, 0.75] });
+    part(b, GEO.cone, 0xFFD25E, { p: [-0.9, 1.05, 0], s: [0.3, 0.5, 0.3], r: [0, 0, 1.0] });
+    part(b, GEO.sphere, 0xF5C242, { p: [-0.1, 0.85, 0.7], s: [0.45, 0.3, 0.15], ol: 0.06 });
+    part(b, GEO.sphere, 0xF5C242, { p: [-0.1, 0.85, -0.7], s: [0.45, 0.3, 0.15], ol: 0.06 });
+    part(b, GEO.sphere, 0xFFD25E, { p: [0.5, 1.55, 0], s: [0.56, 0.56, 0.56] });
+    part(b, GEO.sphere, 0xFF9A3C, { p: [1.02, 1.47, 0], s: [0.36, 0.12, 0.26], ol: 0.06 });
+    for (const z of [0.26, -0.26]) part(b, GEO.sphere, INK, { p: [0.86, 1.7, z], s: [0.08, 0.1, 0.08], ol: 0 });
+  },
+  Watermelon(g) {
+    const b = new THREE.Group(); b.rotation.y = 0.3; g.add(b);
+    const slice = { r: [0, Math.PI / 2, Math.PI / 2] };       // half disc standing up, arc on top, face toward +z
+    part(b, HALF, 0x6FBF7D, { ...slice, s: [1.35, 0.45, 1.35] });
+    part(b, HALF, 0xFF6B7A, { ...slice, s: [1.15, 0.5, 1.15], ol: 0 });
+    for (const [x, y] of [[-0.45, 0.45], [0.45, 0.45], [0, 0.75], [-0.75, 0.25], [0.75, 0.25], [0, 0.3]]) {
+      part(b, GEO.sphere, INK, { p: [x, y, 0.26], s: [0.06, 0.1, 0.03], ol: 0 });
+    }
+  },
+  Cheese(g) {
+    const b = new THREE.Group(); b.rotation.y = 0.4; g.add(b);
+    part(b, TRI, 0xFFD25E, { p: [0, 0.38, 0], s: [1.25, 0.76, 1.25] });
+    for (const [x, z, r] of [[0, 0.35, 0.2], [0.3, -0.25, 0.15], [-0.35, -0.2, 0.17]]) {
+      part(b, GEO.sphere, 0xE8B73A, { p: [x, 0.74, z], s: [r, 0.06, r], ol: 0 });
+    }
+  },
+  Teddy(g) {
+    const fur = 0xC9935A, tan = 0xF0C9A0;
+    part(g, GEO.sphere, fur, { p: [0, 0.78, 0], s: [0.7, 0.75, 0.6] });
+    part(g, GEO.sphere, tan, { p: [0, 0.75, 0.45], s: [0.42, 0.48, 0.18], ol: 0.05 });
+    for (const x of [0.65, -0.65]) part(g, GEO.sphere, fur, { p: [x, 0.95, 0.1], s: [0.2, 0.35, 0.2] });
+    for (const x of [0.35, -0.35]) part(g, GEO.sphere, fur, { p: [x, 0.22, 0.25], s: [0.25, 0.22, 0.3] });
+    part(g, GEO.sphere, fur, { p: [0, 1.68, 0], s: [0.56, 0.56, 0.56] });
+    for (const x of [0.42, -0.42]) part(g, GEO.sphere, fur, { p: [x, 2.12, 0], s: [0.2, 0.2, 0.15] });
+    part(g, GEO.sphere, tan, { p: [0, 1.56, 0.48], s: [0.26, 0.18, 0.18], ol: 0.05 });
+    part(g, GEO.sphere, INK, { p: [0, 1.62, 0.64], s: [0.09, 0.06, 0.05], ol: 0 });
+    for (const x of [0.2, -0.2]) part(g, GEO.sphere, INK, { p: [x, 1.8, 0.48], s: [0.07, 0.08, 0.05], ol: 0 });
+  },
+  Sandwich(g) {
+    const b = new THREE.Group(); b.rotation.y = -0.3; g.add(b);
+    const layer = (c, y, h, s) => part(b, TRI, c, { p: [0, y, 0], s: [s, h, s], ol: 0.05 });
+    layer(0xF5D6A1, 0.14, 0.28, 1.25); layer(0x7FCB8C, 0.32, 0.08, 1.38); layer(0xFF6B6B, 0.42, 0.1, 1.2);
+    layer(0xFFD25E, 0.5, 0.06, 1.32); layer(0xF5D6A1, 0.68, 0.28, 1.25);
+  },
+};
+const FOOD_H = { Baguette: 0.9, 'Birthday cake': 1.85, Phone: 0.6, 'One shoe': 1.05, 'Rubber duck': 2.1,
+  Watermelon: 1.35, Cheese: 0.8, Teddy: 2.3, Sandwich: 0.85 };          // model heights, for stacking
+function makeFood(type) {
+  const g = new THREE.Group();
+  FOOD[type.name](g);
+  return g;
+}
+
+// ---------------- the park ----------------
+function buildPark() {
+  // checkered grass with sprinkled flowers
+  const tex = canvasTex(1200, 760, (c) => {
+    for (let y = 0; y < 760; y += 60) for (let x = 0; x < 1200; x += 60) {
+      c.fillStyle = ((x + y) / 60) % 2 ? '#B9E4BF' : '#C6EBCB'; c.fillRect(x, y, 60, 60);
+    }
+    for (let i = 0; i < 90; i++) {
+      c.fillStyle = pick(['#FFFFFF', '#FFD25E', '#FF8FB1']);
+      c.beginPath(); c.arc(rand(0, 1200), rand(0, 760), rand(2.5, 4), 0, 7); c.fill();
+    }
+  });
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(WW / 10, WH / 10).rotateX(-Math.PI / 2),
+    new THREE.MeshToonMaterial({ map: tex, gradientMap }));
+  scene.add(ground);
+  const outer = new THREE.Mesh(new THREE.PlaneGeometry(500, 500).rotateX(-Math.PI / 2), toonMat(0xA3D3AB));
+  outer.position.y = -0.05; scene.add(outer);
+
+  // white picket fence
+  const fence = new THREE.Group(); scene.add(fence);
+  const hw = WW / 20 + 1.5, hh = WH / 20 + 1.5;
+  const post = (x, z) => part(fence, GEO.box, 0xFFFFFF, { p: [x, 1.1, z], s: [0.55, 2.2, 0.55], ol: 0.12 });
+  for (let x = -hw; x <= hw + 0.01; x += 4) { post(x, -hh); post(x, hh); }
+  for (let z = -hh + 4; z < hh; z += 4) { post(-hw, z); post(hw, z); }
+  for (const yy of [0.8, 1.6]) {
+    part(fence, GEO.box, 0xFFFFFF, { p: [0, yy, -hh], s: [hw * 2, 0.25, 0.25], ol: 0.1 });
+    part(fence, GEO.box, 0xFFFFFF, { p: [0, yy, hh], s: [hw * 2, 0.25, 0.25], ol: 0.1 });
+    part(fence, GEO.box, 0xFFFFFF, { p: [-hw, yy, 0], s: [0.25, 0.25, hh * 2], ol: 0.1 });
+    part(fence, GEO.box, 0xFFFFFF, { p: [hw, yy, 0], s: [0.25, 0.25, hh * 2], ol: 0.1 });
+  }
+
+  // pond, lily pad, nest
+  const pond = new THREE.Group(); pond.position.set(X(POND.x), 0, Z(POND.y)); scene.add(pond);
+  part(pond, GEO.cyl, 0x8FD3F4, { p: [0, 0.12, 0], s: [POND.rx / 10, 0.24, POND.ry / 10], ol: 0.12 });
+  part(pond, GEO.cyl, 0x7CC48A, { p: [-8.5, 0.3, 1.5], s: [2.4, 0.12, 1.4], ol: 0.15 });
+  const ripples = [];
+  for (let i = 0; i < 3; i++) {
+    const r = new THREE.Mesh(new THREE.RingGeometry(0.92, 1, 40).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0xFFFFFF, transparent: true, opacity: 0.7, depthWrite: false }));
+    r.position.set(-3, 0.27, 3); pond.add(r); ripples.push(r);
+  }
+  const nest = new THREE.Group(); nest.position.set(X(NEST.x), 0, Z(NEST.y)); scene.add(nest);
+  part(nest, new THREE.TorusGeometry(3.3, 0.95, 12, 32).rotateX(Math.PI / 2), 0xC9935A, { p: [0, 0.75, 0], ol: 0.06 });
+  part(nest, GEO.cyl, 0xA9743F, { p: [0, 0.4, 0], s: [3.2, 0.3, 3.2], ol: 0 });
+  const nestLoot = new THREE.Group(); nest.add(nestLoot);
+  const nestSign = new THREE.Sprite(new THREE.SpriteMaterial({ map: canvasTex(256, 96, () => {}) }));
+  nestSign.scale.set(6, 2.25, 1); nestSign.position.set(0, 3.2, 4.2); nest.add(nestSign);
+  const drawSign = () => {
+    nestSign.material.map = canvasTex(256, 96, (c) => {
+      c.font = '700 64px Fredoka, "Comic Sans MS", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.lineJoin = 'round'; c.lineWidth = 14; c.strokeStyle = '#2B2A33'; c.strokeText('NEST', 128, 52);
+      c.fillStyle = '#FFF6E5'; c.fillText('NEST', 128, 52);
+    });
+    nestSign.material.needsUpdate = true;
+  };
+  drawSign();
+  document.fonts?.ready.then(drawSign);
+
+  // gingham blankets
+  for (const b of BLANKETS) {
+    const tex = canvasTex(256, 256 * b.h / b.w, (c, w, h) => {
+      c.fillStyle = b.color; c.fillRect(0, 0, w, h);
+      c.fillStyle = 'rgba(255,255,255,0.45)';
+      for (let x = 0; x < w; x += 36) c.fillRect(x, 0, 18, h);
+      for (let y = 0; y < h; y += 36) c.fillRect(0, y, w, 18);
+      c.strokeStyle = '#2B2A33'; c.lineWidth = 8; c.strokeRect(4, 4, w - 8, h - 8);
+    });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(b.w / 10, b.h / 10).rotateX(-Math.PI / 2),
+      new THREE.MeshToonMaterial({ map: tex, gradientMap }));
+    m.position.set(X(b.x), 0.05, Z(b.y)); m.rotation.y = -b.rot; scene.add(m);
+  }
+
+  // bushes with berries
+  for (const b of BUSHES) {
+    const g = new THREE.Group(); g.position.set(X(b.x), 0, Z(b.y)); scene.add(g);
+    const r = b.r / 10;
+    part(g, GEO.sphere, 0x6FBF7D, { p: [-r * 0.45, r * 0.5, 0.1], s: [r * 0.62, r * 0.55, r * 0.6], ol: 0.12 });
+    part(g, GEO.sphere, 0x6FBF7D, { p: [r * 0.45, r * 0.5, -0.1], s: [r * 0.62, r * 0.55, r * 0.6], ol: 0.12 });
+    part(g, GEO.sphere, 0x7FCB8C, { p: [0, r * 0.85, 0], s: [r * 0.7, r * 0.62, r * 0.68], ol: 0.12 });
+    for (let i = 0; i < 6; i++) {
+      const a = i * 1.1, y = r * (0.6 + (i % 3) * 0.25);
+      part(g, GEO.sphere, 0xFF8FB1, { p: [Math.cos(a) * r * 0.7, y, Math.sin(a) * r * 0.55 + r * 0.25], s: [0.32, 0.32, 0.32], ol: 0.12 });
+    }
+    b.mesh = g;
+  }
+  return { ripples, nestLoot };
+}
+const PARK = buildPark();
+
+// ---------------- the goose ----------------
+function buildGoose() {
+  const mats = [];
+  const root = new THREE.Group(); scene.add(root);
+  const shadow = blobShadow(root, 2.4, 1.6);
+  const body = new THREE.Group(); root.add(body);
+  const o = { mats };
+  const feet = [part(body, GEO.sphere, 0xFF9A3C, { p: [0.1, 0.12, 0.55], s: [0.65, 0.16, 0.38], ol: 0.12, ...o }),
+                part(body, GEO.sphere, 0xFF9A3C, { p: [0.1, 0.12, -0.55], s: [0.65, 0.16, 0.38], ol: 0.12, ...o })];
+  const legs = feet.map((f) => part(body, GEO.cyl, 0xFF9A3C, { p: [0, 0.55, f.position.z], s: [0.13, 0.8, 0.13], ol: 0.08, ...o }));
+  const torso = new THREE.Group(); body.add(torso);
+  part(torso, GEO.cone, 0xFFFFFF, { p: [-1.75, 1.95, 0], s: [0.5, 1.1, 0.5], r: [0, 0, Math.PI / 2 + 0.45], ol: 0.12, ...o });
+  part(torso, GEO.sphere, 0xFFFFFF, { p: [0, 1.6, 0], s: [1.75, 1.1, 1.15], ol: 0.1, ...o });
+  part(torso, GEO.sphere, 0xEDEAF2, { p: [-0.25, 1.75, 1.05], s: [1.1, 0.6, 0.25], r: [0, 0, -0.15], ol: 0.12, ...o });
+  part(torso, GEO.sphere, 0xEDEAF2, { p: [-0.25, 1.75, -1.05], s: [1.1, 0.6, 0.25], r: [0, 0, -0.15], ol: 0.12, ...o });
+  const neck = [];
+  for (let i = 0; i < 6; i++) neck.push(part(torso, GEO.sphere, 0xFFFFFF, { s: [0.44, 0.44, 0.44], ol: 0.14, ...o }));
+  const head = new THREE.Group(); torso.add(head);
+  part(head, GEO.sphere, 0xFFFFFF, { s: [0.72, 0.68, 0.66], ol: 0.12, ...o });
+  part(head, GEO.cone, 0xFF9A3C, { p: [0.95, 0.02, 0], s: [0.26, 0.85, 0.3], r: [0, 0, -Math.PI / 2], ol: 0.15, ...o });
+  const jaw = new THREE.Group(); jaw.position.set(0.55, -0.12, 0); head.add(jaw);
+  part(jaw, GEO.cone, 0xFF9A3C, { p: [0.32, -0.04, 0], s: [0.16, 0.6, 0.22], r: [0, 0, -Math.PI / 2], ol: 0.15, ...o });
+  for (const zs of [1, -1]) {
+    part(head, GEO.sphere, INK, { p: [0.3, 0.17, 0.55 * zs], s: [0.13, 0.15, 0.08], ol: 0, ...o });
+    part(head, GEO.sphere, 0xFFFFFF, { p: [0.36, 0.23, 0.6 * zs], s: [0.045, 0.045, 0.03], ol: 0, ...o });
+    part(head, GEO.box, INK, { p: [0.25, 0.43, 0.56 * zs], s: [0.46, 0.09, 0.08], r: [0, 0, -0.38], ol: 0, ...o });
+  }
+  const stack = [];                               // loot balanced on the head: one slot per item
+  for (let i = 0; i < 5; i++) { const s = new THREE.Group(); s.visible = false; scene.add(s); stack.push(s); }
+  return { root, body, torso, neck, head, jaw, feet, legs, mats, shadow, stack, fade: 1 };
+}
+const GOOSE = buildGoose();
+
+// ---------------- humans ----------------
+function buildHuman(p) {
+  const root = new THREE.Group(); scene.add(root);
+  blobShadow(root, 1.6, 1.1);
+  const fig = new THREE.Group(); root.add(fig);
+  const legs = [0.35, -0.35].map((z) => {
+    const hip = new THREE.Group(); hip.position.set(0, 1.5, z); fig.add(hip);
+    part(hip, GEO.cyl, INK, { p: [0, -0.75, 0], s: [0.17, 1.5, 0.17], ol: 0 });
+    return hip;
+  });
+  part(fig, GEO.sphere, new THREE.Color(p.shirt).getHex(), { p: [0, 2.55, 0], s: [0.95, 1.3, 0.85], ol: 0.12 });
+  const skin = toonMat(0xFFE0C2, true);
+  const headG = new THREE.Group(); headG.position.set(0, 4.35, 0); fig.add(headG);
+  const hm = new THREE.Mesh(GEO.sphere, skin); hm.scale.set(0.85, 0.85, 0.85); headG.add(hm);
+  const ho = new THREE.Mesh(GEO.sphere, outlineMat); ho.scale.set(0.95, 0.95, 0.95); headG.add(ho);
+  for (const z of [0.3, -0.3]) part(headG, GEO.sphere, INK, { p: [0.74, 0.12, z], s: [0.1, 0.12, 0.1], ol: 0 });
+  const smile = part(headG, new THREE.TorusGeometry(0.22, 0.05, 6, 14, Math.PI), INK, { p: [0.8, -0.18, 0], r: [0, Math.PI / 2, Math.PI], ol: 0 });
+  const oMouth = part(headG, GEO.sphere, INK, { p: [0.78, -0.25, 0], s: [0.1, 0.16, 0.12], ol: 0 });
+  const brows = [0.3, -0.3].map((z) => part(headG, GEO.box, INK, { p: [0.75, 0.38, z], s: [0.06, 0.06, 0.3], r: [z > 0 ? 0.5 : -0.5, 0, 0], ol: 0 }));
+  if (p.hat === 'cap') {
+    part(headG, new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), 0xE05A8A, { p: [0, 0.25, 0], s: [0.9, 0.75, 0.9], ol: 0.1 });
+    part(headG, GEO.box, 0xE05A8A, { p: [0.75, 0.28, 0], s: [0.8, 0.08, 0.9], ol: 0.1 });
+  } else if (p.hat === 'bow') {
+    for (const z of [0.35, -0.35]) part(headG, GEO.cone, 0xFFD25E, { p: [-0.1, 0.95, z], s: [0.3, 0.6, 0.3], r: [z > 0 ? 1.4 : -1.4, 0, 0], ol: 0.12 });
+  } else if (p.hat === 'sun') {
+    part(headG, GEO.cyl, 0xFFE9A8, { p: [0, 0.6, 0], s: [1.5, 0.1, 1.5], ol: 0.1 });
+    part(headG, new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), 0xFFE9A8, { p: [0, 0.62, 0], s: [0.75, 0.6, 0.75], ol: 0.1 });
+  }
+  return { root, fig, legs, skin, smile, oMouth, brows };
+}
+let HUMANS = [];
+function syncHumanModels() {
+  for (const m of HUMANS) scene.remove(m.root);
+  HUMANS = G.humans.map((h) => buildHuman(h));
+}
+
+// ---------------- loot, waves, feathers (pooled) ----------------
+const itemModels = new Map();                       // loot object → its model on the blanket
+function itemModel(it) {
+  if (!itemModels.has(it)) {
+    const g = new THREE.Group(); scene.add(g);
+    blobShadow(g, 2.0, 1.4);
+    const m = makeFood(it.type); m.scale.setScalar(1.6); g.add(m);
+    itemModels.set(it, { g, m });
+  }
+  return itemModels.get(it);
+}
+// put a fresh model of `type` into a slot group (only when the type changed)
+function fillSlot(slot, type, scale) {
+  if (slot.userData.type === type) return;
+  slot.clear();
+  if (type) { const m = makeFood(type); m.scale.setScalar(scale); slot.add(m); }
+  slot.userData.type = type;
+}
+const wavePool = [], featherPool = [];
+function waveMesh(i) {
+  if (!wavePool[i]) {
+    const m = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 48).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0xE05A8A, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+    scene.add(m); wavePool[i] = m;
+  }
+  return wavePool[i];
+}
+function featherMesh(i) {
+  if (!featherPool[i]) {
+    const g = new THREE.Group(); scene.add(g);
+    part(g, GEO.sphere, 0xFFFFFF, { s: [0.55, 0.12, 0.25], ol: 0.12 });
+    featherPool[i] = g;
+  }
+  return featherPool[i];
+}
+
+// ---------------- DOM text over the 3D view ----------------
+const fx = $('fx');
+const popPool = [];
+function popEl(i) {
+  if (!popPool[i]) { const d = document.createElement('div'); d.className = 'pop'; fx.appendChild(d); popPool[i] = d; }
+  return popPool[i];
+}
+const bubblePool = [], bangPool = [];
+function bubbleEl(i) {
+  if (!bubblePool[i]) { const d = document.createElement('div'); d.className = 'bubble'; fx.appendChild(d); bubblePool[i] = d; }
+  return bubblePool[i];
+}
+function bangEl(i) {
+  if (!bangPool[i]) { const d = document.createElement('div'); d.className = 'bang'; d.textContent = '!'; fx.appendChild(d); bangPool[i] = d; }
+  return bangPool[i];
+}
+const tmpV = new THREE.Vector3();
+function toScreen(x, h, z) {
+  tmpV.set(x, h, z).project(camera);
+  return { x: (tmpV.x * 0.5 + 0.5) * host.clientWidth, y: (-tmpV.y * 0.5 + 0.5) * host.clientHeight, ok: tmpV.z < 1 };
+}
+function place(el, x, h, z, extra = '') {
+  const s = toScreen(x, h, z);
+  el.style.display = s.ok ? '' : 'none';
+  el.style.transform = `translate(${s.x}px, ${s.y}px) translate(-50%, -100%) ${extra}`;
+}
+
+// ---------------- per-frame sync ----------------
+const camPos = new THREE.Vector3(0, 60, 60), camLook = new THREE.Vector3();
+
+function syncScene(dt) {
+  const g = G.goose;
+  const t = G.time;
+  // ripples
+  PARK.ripples.forEach((r, i) => {
+    const u = ((t * 0.35 + i / 3) % 1);
+    r.scale.set(1 + u * 7, 1, 1 + u * 4); r.material.opacity = 0.7 * (1 - u);
+  });
+
+  // goose
+  const gm = GOOSE;
+  let lift = 0, spin = 0;
+  if (g.yeet) { const u = g.yeet.t / g.yeet.dur; lift = Math.sin(Math.PI * u) * 16; spin = u * Math.PI * 4; }
+  gm.root.position.set(X(g.x), lift, Z(g.y));
+  gm.root.rotation.set(spin, g.yaw, 0, 'YXZ');
+  gm.shadow.visible = lift < 1;
+  const moving = Math.hypot(g.vx, g.vy) > 10, sn = g.sneak;
+  const step = moving ? Math.sin(g.phase) : 0, bob = moving ? Math.abs(Math.cos(g.phase)) * 0.25 : 0;
+  gm.body.rotation.x = step * 0.12;
+  gm.torso.position.y = bob - sn * 0.5;
+  gm.torso.scale.y = 1 - 0.15 * sn;
+  gm.feet[0].position.x = 0.1 + step * 0.45; gm.feet[1].position.x = 0.1 - step * 0.45;
+  gm.legs[0].position.x = step * 0.25; gm.legs[1].position.x = -step * 0.25;
+  // neck: from the chest to a head that drops forward when sneaking and rises when honking
+  const hx = 1.7 + sn * 1.7 + g.honkAnim * 0.6, hy = 4.4 - sn * 2.3 + g.honkAnim * 0.9 + Math.sin(t * 3) * 0.06;
+  const bx = 1.1, by = 2.1, cx = 2.0, cy = (by + hy) / 2 + 0.4;
+  gm.neck.forEach((s, i) => {
+    const u = i / (gm.neck.length - 1), a = (1 - u) * (1 - u), b = 2 * u * (1 - u), c = u * u;
+    s.position.set(a * bx + b * cx + c * hx, a * by + b * cy + c * hy, 0);
+  });
+  gm.head.position.set(hx + 0.15, hy + 0.15, 0);
+  gm.head.rotation.z = g.honkAnim > 0 ? 0.35 : -sn * 0.35;
+  gm.jaw.rotation.z = g.honkAnim > 0 ? -0.55 : 0;
+  // hide in bushes
+  const fade = g.inBush ? 0.45 : 1;
+  gm.fade += (fade - gm.fade) * (1 - Math.exp(-dt * 8));
+  for (const m of gm.mats) { m.transparent = gm.fade < 0.99; m.opacity = gm.fade; }
+  // loot stack on the head
+  const head = new THREE.Vector3(); gm.head.getWorldPosition(head);
+  let stackY = head.y + 0.6;
+  gm.stack.forEach((s, i) => {
+    const it = g.carry[i];
+    s.visible = !!it;
+    fillSlot(s, it || null, 0.85);
+    if (it) {
+      const wob = Math.sin(t * 5 + i) * 0.1 * (i + 1);
+      s.position.set(head.x + wob, stackY, head.z);
+      s.rotation.set(0, g.yaw + i * 0.7, wob * 0.5);
+      stackY += FOOD_H[it.name] * 0.85 + 0.05;
+    }
+  });
+
+  // humans
+  G.humans.forEach((h, i) => {
+    const m = HUMANS[i]; if (!m) return;
+    const walk = Math.hypot(h.vx, h.vy) > 10 ? Math.sin(h.phase) : 0;
+    const shake = h.state === 'scared' ? Math.sin(t * 60) * 0.18 : 0;
+    m.root.position.set(X(h.x) + shake, 0, Z(h.y));
+    m.root.rotation.y = h.yaw;
+    m.legs[0].rotation.z = walk * 0.5; m.legs[1].rotation.z = -walk * 0.5;
+    m.fig.position.y = Math.abs(walk) * 0.15 + (h.state === 'scared' ? Math.abs(Math.sin(t * 20)) * 0.4 : 0);
+    m.skin.color.set(h.state === 'chase' ? 0xFFB3A7 : 0xFFE0C2);
+    m.smile.visible = h.state === 'wander' || h.state === 'alert';
+    m.oMouth.visible = !m.smile.visible;
+    m.brows.forEach((b) => (b.visible = h.state === 'chase'));
+  });
+
+  // loot on the blankets
+  for (const it of G.items) {                     // gently bobbing, wiggling, very stealable
+    const p = itemModel(it);
+    p.g.position.set(X(it.x), 0, Z(it.y));
+    p.m.position.y = 0.15 + Math.abs(Math.sin(t * 2.5 + it.bob)) * 0.5;
+    p.m.rotation.y = Math.sin(t * 1.5 + it.bob) * 0.35;
+  }
+  for (const [it, p] of itemModels) {
+    if (!G.items.includes(it)) { scene.remove(p.g); itemModels.delete(it); }
+  }
+  // nest pile
+  if (PARK.nestLoot.userData.n !== G.banked.length) {
+    PARK.nestLoot.clear();
+    G.banked.slice(-7).forEach((type, i) => {
+      const m = makeFood(type); m.scale.setScalar(0.75);
+      m.position.set(-1.8 + (i % 4) * 1.2, 0.7 + Math.floor(i / 4) * 0.8, (i % 2) * 0.8 - 0.4);
+      m.rotation.y = i * 1.3;
+      PARK.nestLoot.add(m);
+    });
+    PARK.nestLoot.userData.n = G.banked.length;
+  }
+
+  // honk waves and feathers
+  G.waves.forEach((w, i) => {
+    const m = waveMesh(i), u = w.t / 0.7;
+    m.visible = true; m.position.set(X(w.x), 3 + u, Z(w.y));
+    m.scale.setScalar(3 + u * 24); m.material.opacity = 1 - u;
+  });
+  for (let i = G.waves.length; i < wavePool.length; i++) wavePool[i].visible = false;
+  G.feathers.forEach((f, i) => {
+    const m = featherMesh(i);
+    m.visible = true; m.position.set(X(f.x), f.h, Z(f.y)); m.rotation.set(f.r, f.r * 0.7, f.r * 0.3);
+  });
+  for (let i = G.feathers.length; i < featherPool.length; i++) featherPool[i].visible = false;
+
+  // camera follows the goose at a fixed angle (screen right = sensor +X, up = sensor +Y)
+  const tx = clamp(X(g.x), -36, 36), tz = clamp(Z(g.y), -26, 30);
+  const want = new THREE.Vector3(tx, 50, tz + 42);
+  camPos.lerp(want, 1 - Math.exp(-dt * 4));
+  camLook.lerp(new THREE.Vector3(tx, 0, tz - 2), 1 - Math.exp(-dt * 4));
+  camera.position.copy(camPos);
+  if (G.shake > 0) camera.position.add(new THREE.Vector3(rand(-1, 1), rand(-1, 1), 0).multiplyScalar(G.shake * 4));
+  camera.lookAt(camLook);
+  camera.updateMatrixWorld();
+
+  // floating text
+  G.pops.forEach((p, i) => {
+    const el = popEl(i), u = p.t / 1.8, s = p.t < 0.15 ? 0.6 + (p.t / 0.15) * 0.4 : 1;
+    const key = p.text + '|' + p.sub;
+    if (el.dataset.key !== key) {
+      el.dataset.key = key;
+      el.className = p.sub ? 'pop pill' : 'pop';
+      if (p.sub) {
+        el.textContent = '';
+        const b = document.createElement('b'), q = document.createElement('span');
+        b.textContent = p.text; q.textContent = p.sub; el.append(b, q);
+      } else el.textContent = p.text;
+    }
+    el.style.color = p.color; el.style.fontSize = p.sub ? '' : `${p.size}px`;
+    el.style.opacity = Math.min(1, 2.6 - u * 2);
+    place(el, X(p.x), p.h + p.t * 3, Z(p.y), `scale(${s})`);
+  });
+  for (let i = G.pops.length; i < popPool.length; i++) popPool[i].style.display = 'none';
+  G.humans.forEach((h, i) => {
+    const b = bubbleEl(i), bang = bangEl(i);
+    const alert = h.state === 'alert' || (h.state === 'chase' && Math.sin(t * 10) > 0);
+    bang.style.display = 'none';
+    if (alert) place(bang, X(h.x), 7.2, Z(h.y));
+    if (h.say) {
+      if (b.textContent !== h.say.text) b.textContent = h.say.text;
+      place(b, X(h.x), alert ? 9.6 : 7.4, Z(h.y));
+    } else b.style.display = 'none';
+  });
+  if (g.yeet) { const el = popEl(G.pops.length); el.className = 'pop'; el.dataset.key = 'wheee'; el.textContent = 'wheee'; el.style.color = '#FFFFFF'; el.style.fontSize = '20px'; el.style.opacity = 1; place(el, X(g.x), lift + 7, Z(g.y)); }
+}
+
+function syncHUD() {
+  const g = G.goose;
+  $('hLoot').textContent = `LOOT ${G.score}`;
+  const mm = Math.max(0, Math.ceil(G.left));
+  $('hClock').textContent = `${Math.floor(mm / 60)}:${String(mm % 60).padStart(2, '0')}`;
+  $('hClock').classList.toggle('late', G.left < 15);
+  const ready = g.honkCd <= 0;
+  const hh = $('hHonk');
+  if (hh.firstChild.nodeValue !== (ready ? 'HONK READY' : 'recharging…')) hh.firstChild.nodeValue = ready ? 'HONK READY' : 'recharging…';
+  hh.classList.toggle('wait', !ready);
+  $('hHonkBar').style.width = ready ? '0' : `${(1 - g.honkCd / 2.2) * 100}%`;
+  $('hDot').style.transform = `translate(${In.sx * 26}px, ${-In.sy * 26}px)`;
+  $('hSneak').style.width = `${In.sneak * 100}%`;
+  $('hTxt1').textContent = `sneak ${In.source === 'sensor' ? In.pressN.toFixed(1) + ' N' : '(Shift)'}`;
+  $('hTxt2').textContent = In.honkHeld ? 'HONK!!' : (In.source === 'sensor' ? `honk ≥ ${(+$('fHonk').value).toFixed(1)} N` : 'Space = honk');
+  $('hPause').style.display = G.paused ? 'flex' : 'none';
+}
+
+function resize() {
+  const w = host.clientWidth, h = host.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(host);
+
+// ===========================================================================
+// Menu / results
+// ===========================================================================
+function rankFor(score) {
+  if (score < 80) return 'A Slightly Rude Duck';
+  if (score < 200) return 'Certified Menace';
+  if (score < 400) return 'Picnic Terrorist (non-violent)';
+  return 'THE HONKENING';
+}
+
+function showCard(kind) {
+  const card = $('card');
+  if (kind === 'over') {
+    card.innerHTML = `
+      <div class="title">TIME'S UP</div>
+      <div class="tag">stole ${G.stolen} things · ${G.honks} honks · ${G.scared} adults screamed · bonked ${G.bonks}×</div>
+      <div class="big">${G.score} LOOT</div>
+      <div class="rank">Rank: ${rankFor(G.score)}</div>
+      <div class="note" style="margin-bottom:16px">best: ${G.best} · no geese were harmed. several sandwiches were.</div>
+      <div class="actions"><button class="pink" id="btnStart">AGAIN, BUT WORSE (Enter)</button></div>`;
+    $('hud').classList.add('hidden');
+  } else {
+    card.innerHTML = `
+      <div class="title">HONK HEIST <small>3D</small></div>
+      <div class="tag">You are a goose (or a large white duck, we don't judge). It is a lovely day at the park. You have no remorse. Now in three dimensions, somehow.</div>
+      <table class="map">
+        <tr><td>👉</td><td>PUSH it sideways</td><td>waddle around (harder push = faster waddle)</td></tr>
+        <tr><td>🤏</td><td>PRESS gently</td><td>sneak — crouch low, humans spot you way later</td></tr>
+        <tr><td>💥</td><td>SQUISH hard</td><td>HONK. adults scream and flee. 2 s cooldown</td></tr>
+      </table>
+      <div class="goal">Waddle into picnic stuff to grab it (stack up to 5 on your head), bring it to your <b>NEST</b>. More items at once = combo. Get grabbed while carrying loot = <b>BONK</b>, back to the pond. Bushes hide you.</div>
+      <div class="actions"><button class="pink" id="btnStart">BE A MENACE (Enter)</button><span class="note">keyboard works too</span></div>`;
+  }
+  $('btnStart').onclick = startGame;
+  $('overlay').classList.remove('hidden');
+}
+
+// ===========================================================================
+// Main loop
+// ===========================================================================
+let last = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = clamp((now - last) / 1000, 0, 0.05);   // never negative, never a huge jump
+  last = now;
+
+  if (now - Sen.lastRateT > 1000) {
+    Sen.rate = Sen.count * 1000 / (now - Sen.lastRateT); Sen.count = 0; Sen.lastRateT = now;
+    $('rate').textContent = Sen.connected ? `${Sen.rate.toFixed(0)} Hz` : '';
+    if (Sen.connected && Sen.rate < 1) setMsg('msgConn', 'warn', 'No data. Press the RST button on the ESP32, and make sure the viewer page is not holding the port.');
+  }
+  if (Sen.connected && Sen.firstDataT && !Sen.autoZeroed && !Sen.collect && now - Sen.firstDataT > 1500) {
+    zero().then(() => setMsg('msgConn', 'ok', 'Sensor ready. Go be a menace.'));
+  }
+  updateSensor();
+  if (Sen.ok) { $('ofx').textContent = Sen.F[0].toFixed(2); $('ofy').textContent = Sen.F[1].toFixed(2); $('ofz').textContent = Sen.F[2].toFixed(2); }
+
+  readInput(dt);
+  if (G.state === 'play' && !G.paused) update(dt);
+  else if (G.state !== 'play') { G.time += dt; G.goose.phase += dt * 3; }   // idle wobble behind the menu
+
+  if (HUMANS.length !== G.humans.length || HUMANS._for !== G.humans) { syncHumanModels(); HUMANS._for = G.humans; }
+  syncScene(dt);
+  if (G.state === 'play') syncHUD();
+  renderer.render(scene, camera);
+}
+
+$('btnConnect').onclick = connect;
+$('btnZero').onclick = zero;
+$('polUp').onchange = () => { if (Sen.connected) zero(); };
+$('btnFlipX').onclick = () => { Sen.axisMap.sx *= -1; saveAxisMap(); updateAxisInfo(); Sen.filt = null; Sen.x = null; if (Sen.connected) zero(); };
+$('btnFlipY').onclick = () => { Sen.axisMap.sy *= -1; saveAxisMap(); updateAxisInfo(); Sen.filt = null; Sen.x = null; if (Sen.connected) zero(); };
+navigator.serial?.addEventListener('disconnect', () => { if (Sen.connected) disconnect(); });
+
+loadStored();
+G.goose = makeGoose();
+G.humans = makeHumans();
+resize();
+showCard('menu');
+if (location.hash === '#play') startGame();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

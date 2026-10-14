@@ -1,0 +1,1155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Magnet Pose Tracker</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #161b22; --panel2: #1c232c; --line: #2a333e;
+    --text: #e6edf3; --muted: #8b98a5; --accent: #4aa3ff; --ok: #3fb950;
+    --warn: #d29922; --bad: #f85149; --bx: #ff6b6b; --by: #51cf66; --bz: #4dabf7;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .app { display: grid; grid-template-columns: 370px 1fr; height: 100vh; }
+  aside { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; padding: 14px; }
+  main { position: relative; overflow: hidden; }
+  #view { position: absolute; inset: 0; }
+  h1 { font-size: 16px; margin: 0 0 2px; }
+  .sub { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+  section { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+  section h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+  button { background: #253041; color: var(--text); border: 1px solid var(--line); border-radius: 6px;
+    padding: 6px 10px; cursor: pointer; font: inherit; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #04121f; border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .45; cursor: default; }
+  .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+  .row:last-child { margin-bottom: 0; }
+  label { color: var(--muted); }
+  input[type=number], select { background: #0d1117; color: var(--text); border: 1px solid var(--line);
+    border-radius: 5px; padding: 4px 6px; font: inherit; width: 72px; }
+  select { width: auto; }
+  input[type=range] { flex: 1; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .tile { background: #0d1117; border: 1px solid var(--line); border-radius: 6px; padding: 6px; }
+  .tile .k { color: var(--muted); font-size: 11px; }
+  .tile .v { font: 600 15px/1.2 ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; }
+  .status { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .dot.on { background: var(--ok); } .dot.demo { background: var(--warn); }
+  .note { color: var(--muted); font-size: 12px; }
+  .msg { font-size: 12px; padding: 6px 8px; border-radius: 6px; margin-top: 6px; display: none; }
+  .msg.show { display: block; }
+  .msg.warn { background: rgba(210,153,34,.15); color: #f0c060; }
+  .msg.bad { background: rgba(248,81,73,.15); color: #ff8f88; }
+  .msg.ok { background: rgba(63,185,80,.15); color: #7ee08a; }
+  #chart { width: 100%; height: 110px; display: block; background: #0d1117; border-radius: 6px; border: 1px solid var(--line); }
+  .legend { display: flex; gap: 10px; font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 2px; margin-right: 4px; vertical-align: middle; background: currentColor; }
+  #log { font: 11px/1.35 ui-monospace, Consolas, monospace; color: var(--muted); max-height: 90px; overflow-y: auto; white-space: pre-wrap; }
+  .hud { position: absolute; left: 12px; top: 12px; background: rgba(14,17,22,.78); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 12px; font: 13px/1.5 ui-monospace, Consolas, monospace; pointer-events: none; }
+  .hud b { color: var(--accent); }
+  .hint { position: absolute; right: 12px; bottom: 10px; color: var(--muted); font-size: 11px; pointer-events: none; text-align: right; }
+  @media (max-width: 800px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: 55vh auto; height: auto; }
+    main { order: -1; height: 55vh; }
+    aside { border-right: 0; padding: 12px 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+  <h1>Magnet Pose Tracker</h1>
+  <div class="sub">ESP32-S3 + GY-271 · dipole-model localisation</div>
+
+  <section>
+    <h2>1 · Connection</h2>
+    <div class="row">
+      <button id="btnConnect" class="primary">Connect serial</button>
+      <button id="btnDemo">Demo</button>
+      <select id="baud"><option>115200</option><option>230400</option><option>921600</option></select>
+    </div>
+    <div class="row">
+      <span class="status"><span id="dot" class="dot"></span><span id="connText">Disconnected</span></span>
+      <span class="note" id="rate"></span>
+    </div>
+    <div class="note" id="chipInfo">Sensor: –</div>
+    <div id="msgSerial" class="msg bad"></div>
+  </section>
+
+  <section>
+    <h2>2 · Magnet</h2>
+    <div class="row">
+      <label>Ø</label><input id="magD" type="number" value="2" step="0.5" min="0.5"><label>mm</label>
+      <label>t</label><input id="magT" type="number" value="1" step="0.5" min="0.5"><label>mm</label>
+    </div>
+    <div class="row">
+      <label>Grade</label>
+      <select id="magGrade">
+        <option value="1.17" selected>N35 (Br 1.17 T)</option>
+        <option value="1.30">N42 (Br 1.30 T)</option>
+        <option value="1.37">N48 (Br 1.37 T)</option>
+        <option value="1.44">N52 (Br 1.44 T)</option>
+      </select>
+      <button id="btnUseDims">Use estimate</button>
+    </div>
+    <div class="note" id="momentInfo"></div>
+    <div id="msgRange" class="msg warn"></div>
+  </section>
+
+  <section>
+    <h2>3 · Calibration</h2>
+    <div class="row">
+      <button id="btnBg">a) Capture background</button>
+      <span class="note">magnet far away (&gt; 30 cm)</span>
+    </div>
+    <div class="row">
+      <button id="btnRest">b) Calibrate rest pose</button>
+    </div>
+    <div class="row">
+      <label>Rest height</label><input id="restH" type="number" value="13.6" step="0.1" min="2"><label>mm</label>
+      <label>Side</label>
+      <select id="side"><option value="1">above (+Z)</option><option value="-1">below (−Z)</option></select>
+    </div>
+    <div class="note">For (b) hold the magnet centred on the sensor's Z axis, face parallel to the chip, at the rest height. This measures the moment strength and polarity.</div>
+    <div class="row" style="margin-top:6px">
+      <button id="btnAxis">c) Axis check</button>
+      <button id="btnFlipX">Flip X</button>
+      <button id="btnFlipY">Flip Y</button>
+      <button id="btnAxisReset">Reset</button>
+    </div>
+    <div class="note" id="axisInfo"></div>
+    <div class="row" style="margin-top:6px">
+      <button id="btnRezero">Re-zero at rest</button>
+      <span class="note">magnet in place, no load — for embedded magnets</span>
+    </div>
+    <div id="msgCal" class="msg"></div>
+  </section>
+
+  <section>
+    <h2>4 · Solver</h2>
+    <div class="row">
+      <select id="mode" style="width:100%">
+        <option value="pos">Position x,y,z — magnet axis stays ∥ sensor Z</option>
+        <option value="tilt">Height + tilt — magnet stays on sensor Z axis</option>
+        <option value="full">Full 5-DOF — regularised (experimental)</option>
+      </select>
+    </div>
+    <div class="note" id="modeNote"></div>
+    <div class="row" id="regRow" style="margin-top:6px">
+      <label>Prior weight</label><input id="reg" type="range" min="0" max="100" value="20"><span id="regVal" class="note"></span>
+    </div>
+    <div class="row">
+      <label>Smoothing</label><input id="smooth" type="range" min="0" max="95" value="60"><span id="smoothVal" class="note"></span>
+    </div>
+    <div class="row">
+      <label><input id="showTrail" type="checkbox" checked> trail</label>
+      <label><input id="showField" type="checkbox" checked> field vector</label>
+      <button id="btnClearTrail">Clear trail</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>5 · Force (uncalibrated)</h2>
+    <div class="row">
+      <label>k shear</label><input id="kxy" type="number" value="0.5" step="0.1" min="0.01"><label>N/mm</label>
+      <label>k normal</label><input id="kz" type="number" value="1.6" step="0.1" min="0.01"><label>N/mm</label>
+    </div>
+    <div class="row">
+      <label>Arrow</label><input id="fScale" type="number" value="10" step="1" min="1"><label>mm/N</label>
+      <label><input id="showForce" type="checkbox" checked> show</label>
+      <button id="btnZeroF">Zero force</button>
+    </div>
+    <div class="grid3" style="margin-top:6px">
+      <div class="tile"><div class="k">Fx N</div><div class="v" id="ofx">–</div></div>
+      <div class="tile"><div class="k">Fy N</div><div class="v" id="ofy">–</div></div>
+      <div class="tile"><div class="k">Fz N</div><div class="v" id="ofz">–</div></div>
+    </div>
+    <div class="note" style="margin-top:6px">F = k × (magnet displacement from rest), like a spring. Defaults are rough estimates for Ecoflex 00-35 FAST (E ≈ 60 kPa), 20×20 mm footprint, 15 mm thick — replace them after calibrating against a load cell. Press "Zero force" with no load.</div>
+  </section>
+
+  <section>
+    <h2>Estimate</h2>
+    <div class="grid3">
+      <div class="tile"><div class="k">x mm</div><div class="v" id="ox">–</div></div>
+      <div class="tile"><div class="k">y mm</div><div class="v" id="oy">–</div></div>
+      <div class="tile"><div class="k">z mm</div><div class="v" id="oz">–</div></div>
+      <div class="tile"><div class="k">tilt °</div><div class="v" id="otilt">–</div></div>
+      <div class="tile"><div class="k">azimuth °</div><div class="v" id="oaz">–</div></div>
+      <div class="tile"><div class="k">fit error</div><div class="v" id="ores">–</div></div>
+    </div>
+    <div id="msgSolve" class="msg"></div>
+  </section>
+
+  <section>
+    <h2>Field (background removed, µT)</h2>
+    <div class="grid3" style="margin-bottom:6px">
+      <div class="tile"><div class="k" style="color:var(--bx)">Bx</div><div class="v" id="obx">–</div></div>
+      <div class="tile"><div class="k" style="color:var(--by)">By</div><div class="v" id="oby">–</div></div>
+      <div class="tile"><div class="k" style="color:var(--bz)">Bz</div><div class="v" id="obz">–</div></div>
+    </div>
+    <canvas id="chart"></canvas>
+    <div class="legend"><span style="color:var(--bx)">Bx</span><span style="color:var(--by)">By</span><span style="color:var(--bz)">Bz</span><span id="chartScale" style="margin-left:auto"></span></div>
+  </section>
+
+  <section>
+    <h2>Record</h2>
+    <div class="row">
+      <button id="btnRec">Start recording</button>
+      <button id="btnSave" disabled>Save CSV</button>
+      <span class="note" id="recInfo"></span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Device log</h2>
+    <div id="log"></div>
+  </section>
+</aside>
+
+<main>
+  <div id="view"></div>
+  <div class="hud" id="hud">No data</div>
+  <div class="hint">
+    <span style="color:#ffd43b">■</span> magnet N-pole direction ·
+    <span style="color:#f59f00">■</span> measured field at sensor ·
+    <span style="color:#e64980">■</span> force<br>
+    drag: rotate · right-drag: pan · wheel: zoom · units: mm · sensor at origin
+  </div>
+</main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+"use strict";
+
+// === SOLVER BEGIN ===
+// Units: position in mm, field in µT. Magnetic moment expressed as
+// M = 1e8 * m[A·m²]  so that  B[µT] = M * (3 r̂ (r̂·u) − u) / r[mm]^3.
+const Solver = (() => {
+  function dipoleB(p, u, M) {
+    // Sensor at origin, magnet centre at p, unit moment direction u.
+    const rx = -p[0], ry = -p[1], rz = -p[2];
+    const r2 = rx * rx + ry * ry + rz * rz, r = Math.sqrt(r2), k = M / (r2 * r);
+    const nx = rx / r, ny = ry / r, nz = rz / r;
+    const d = nx * u[0] + ny * u[1] + nz * u[2];
+    return [k * (3 * nx * d - u[0]), k * (3 * ny * d - u[1]), k * (3 * nz * d - u[2])];
+  }
+
+  // Moment direction from two tilt parameters (a, b): u = pol * normalize(a, b, 1).
+  function dirFromAB(a, b, pol) {
+    const n = Math.sqrt(a * a + b * b + 1);
+    return [pol * a / n, pol * b / n, pol / n];
+  }
+
+  // Each mode maps its parameter vector x to a pose {p, u}.
+  // x[...height] is always stored positive; `side` chooses above/below the sensor.
+  const MODES = {
+    pos:  { n: 3, pose: (x, c) => ({ p: [x[0], x[1], c.side * x[2]], u: [0, 0, c.pol] }),
+            lo: [-300, -300, 1], hi: [300, 300, 400] },
+    tilt: { n: 3, pose: (x, c) => ({ p: [0, 0, c.side * x[0]], u: dirFromAB(x[1], x[2], c.pol) }),
+            lo: [1, -6, -6], hi: [400, 6, 6] },
+    full: { n: 5, pose: (x, c) => ({ p: [x[0], x[1], c.side * x[2]], u: dirFromAB(x[3], x[4], c.pol) }),
+            lo: [-300, -300, 1, -6, -6], hi: [300, 300, 400, 6, 6] },
+  };
+
+  function restParams(mode, h) {
+    return mode === 'pos' ? [0, 0, h] : mode === 'tilt' ? [h, 0, 0] : [0, 0, h, 0, 0];
+  }
+
+  // Residual: relative field error (3 entries) + optional prior terms (full mode).
+  function residual(x, mode, Bm, c) {
+    const { p, u } = MODES[mode].pose(x, c);
+    const B = dipoleB(p, u, c.M);
+    const s = 1 / (Math.hypot(Bm[0], Bm[1], Bm[2]) + 1);
+    const r = [(B[0] - Bm[0]) * s, (B[1] - Bm[1]) * s, (B[2] - Bm[2]) * s];
+    if (mode === 'full' && c.reg > 0) {
+      const x0 = restParams('full', c.h), sc = [c.h, c.h, c.h, 1, 1];
+      for (let i = 0; i < 5; i++) r.push(c.reg * (x[i] - x0[i]) / sc[i]);
+    }
+    return r;
+  }
+
+  function solveLinear(A, b) {
+    const n = b.length, M = A.map((row, i) => [...row, b[i]]);
+    for (let c = 0; c < n; c++) {
+      let piv = c;
+      for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[piv][c])) piv = r;
+      if (Math.abs(M[piv][c]) < 1e-300) return null;
+      [M[c], M[piv]] = [M[piv], M[c]];
+      for (let r = c + 1; r < n; r++) {
+        const f = M[r][c] / M[c][c];
+        for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k];
+      }
+    }
+    const x = new Array(n);
+    for (let i = n - 1; i >= 0; i--) {
+      let s = M[i][n];
+      for (let k = i + 1; k < n; k++) s -= M[i][k] * x[k];
+      x[i] = s / M[i][i];
+    }
+    return x;
+  }
+
+  const sq = (r) => r.reduce((s, v) => s + v * v, 0);
+
+  // Levenberg–Marquardt with numerical Jacobian and box constraints.
+  function lm(x0, mode, Bm, c, iters = 40) {
+    const { n, lo, hi } = MODES[mode];
+    const clamp = (x) => x.map((v, i) => Math.min(hi[i], Math.max(lo[i], v)));
+    let x = clamp(x0.slice()), r = residual(x, mode, Bm, c), cost = sq(r), lambda = 1e-3;
+    for (let it = 0; it < iters; it++) {
+      const m = r.length, J = [];
+      for (let j = 0; j < n; j++) {
+        const h = 1e-5 * Math.max(1, Math.abs(x[j]));
+        const xp = x.slice(); xp[j] += h;
+        const xm = x.slice(); xm[j] -= h;
+        const rp = residual(xp, mode, Bm, c), rm = residual(xm, mode, Bm, c);
+        J.push(rp.map((v, i) => (v - rm[i]) / (2 * h)));   // J[j][i] = dr_i/dx_j
+      }
+      const A = [], g = [];
+      for (let a = 0; a < n; a++) {
+        A.push([]);
+        let s = 0;
+        for (let i = 0; i < m; i++) s += J[a][i] * r[i];
+        g.push(-s);
+        for (let b = 0; b < n; b++) {
+          let t = 0;
+          for (let i = 0; i < m; i++) t += J[a][i] * J[b][i];
+          A[a].push(t);
+        }
+      }
+      let improved = false, step = 0;
+      while (lambda < 1e10) {
+        const Ad = A.map((row, i) => row.map((v, j) => (i === j ? v * (1 + lambda) + 1e-12 : v)));
+        const dx = solveLinear(Ad, g);
+        if (!dx) { lambda *= 10; continue; }
+        const xn = clamp(x.map((v, i) => v + dx[i]));
+        const rn = residual(xn, mode, Bm, c), cn = sq(rn);
+        if (cn < cost) {
+          step = Math.max(...xn.map((v, i) => Math.abs(v - x[i])));
+          x = xn; r = rn; cost = cn; lambda = Math.max(lambda / 3, 1e-9); improved = true;
+          break;
+        }
+        lambda *= 4;
+      }
+      if (!improved || step < 1e-6) break;
+    }
+    return { x, cost, fieldErr: Math.sqrt(sq(r.slice(0, 3))) };
+  }
+
+  function seeds(mode, h) {
+    const zs = [0.5, 0.8, 1, 1.4, 2, 3].map((f) => f * h), out = [];
+    const t = [-1.2, 0, 1.2];
+    for (const z of zs) {
+      if (mode === 'pos') for (const a of [-1, 0, 1]) for (const b of [-1, 0, 1]) out.push([a * h, b * h, z]);
+      else if (mode === 'tilt') for (const a of t) for (const b of t) out.push([z, a, b]);
+      else for (const a of [-1, 0, 1]) for (const b of [-1, 0, 1]) {
+        out.push([a * h, b * h, z, 0, 0]);
+        out.push([0, 0, z, a, b]);
+      }
+    }
+    return out;
+  }
+
+  // Track from the previous solution. A global multi-start search runs only when
+  // tracking is clearly lost, and its answer replaces the tracked one only if it
+  // fits much better — otherwise noise would make the pose hop between distant
+  // solutions with similar error.
+  function solve(prev, mode, Bm, c) {
+    const track = prev ? lm(prev, mode, Bm, c) : null;
+    let best = track;
+    if (!track || track.fieldErr > 0.08) {
+      let g = null;
+      for (const s of seeds(mode, c.h)) {
+        const r = lm(s, mode, Bm, c, 25);
+        if (!g || r.cost < g.cost) g = r;
+      }
+      g = lm(g.x, mode, Bm, c, 60);
+      if (!track || g.fieldErr < 0.6 * track.fieldErr) best = g;
+    }
+    const pose = MODES[mode].pose(best.x, c);
+    return { ...best, ...pose };
+  }
+
+  return { dipoleB, dirFromAB, MODES, restParams, residual, lm, solve };
+})();
+// === SOLVER END ===
+
+// ---------------------------------------------------------------------------
+// App state
+// ---------------------------------------------------------------------------
+const $ = (id) => document.getElementById(id);
+const S = {
+  source: null,               // 'serial' | 'demo' | null
+  port: null, reader: null,
+  raw: null, bg: [0, 0, 0], hasBg: false,
+  filt: null, sat: false, rangeUT: 800, detectUT: 3, noiseUT: 0.3,
+  M: null, pol: 1, calibrated: false,
+  x: null, sol: null, reliable: false,
+  p0: null,                   // zero-force magnet position (null → rest pose)
+  xF: null, forceP: null,     // Position-mode solution used for the force (any display mode)
+  force: null,
+  axisMap: loadAxisMap(),     // sensor axes → model axes (set by the axis check)
+  axisWizard: 0,              // 0 idle, 1 waiting for +X capture, 2 waiting for +Y
+  axisCapX: null,
+  hist: [], sampleCount: 0, lastRateT: performance.now(), rate: 0,
+  collect: null,              // {n, sum, done}
+  rec: null, recRows: [],
+  demoTimer: null, demoT: 0, demoTruth: null,
+};
+
+function cfg() {
+  return {
+    M: S.M, pol: S.pol, side: +$('side').value, h: +$('restH').value,
+    reg: ($('reg').value / 100) ** 2 * 2,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Magnet / moment helpers
+// ---------------------------------------------------------------------------
+function momentFromDims() {
+  const d = +$('magD').value, t = +$('magT').value, Br = +$('magGrade').value;
+  const V = Math.PI * (d / 2) ** 2 * t * 1e-9;           // m³
+  const m = Br * V / (4 * Math.PI * 1e-7);                // A·m²
+  return 1e8 * m;                                         // µT·mm³
+}
+function satDistance(M) { return Math.cbrt(2 * M / S.rangeUT); }  // on-axis
+
+function updateMomentInfo() {
+  const Mest = momentFromDims();
+  const M = S.M ?? Mest;
+  const m = M / 1e8;
+  $('momentInfo').textContent =
+    `Estimated m = ${(Mest / 1e8 * 1000).toFixed(1)} mA·m²` +
+    (S.M ? ` · in use: ${(m * 1000).toFixed(1)} mA·m² (${S.calibrated ? 'calibrated' : 'from dimensions'})` : '');
+  // Near limit: on-axis field reaches the sensor range. Far limit: distance where
+  // sensor noise causes ~1 mm position error (|dB/dr| = 3B/r → r⁴ = 6·M·1mm / noise).
+  const rs = satDistance(M), rf = Math.pow(6 * M * 1 / S.noiseUT, 0.25);
+  const mr = $('msgRange');
+  mr.className = 'msg warn show';
+  mr.textContent = `Usable distance ≈ ${rs.toFixed(0)}–${rf.toFixed(0)} mm from the chip. ` +
+    `Closer than ${rs.toFixed(0)} mm the sensor saturates (±${S.rangeUT} µT); beyond ~${rf.toFixed(0)} mm noise gives >1 mm error.`;
+  rebuildMagnetMesh();
+}
+
+function setMsg(id, cls, text) {
+  const el = $(id);
+  el.className = 'msg' + (text ? ' show ' + cls : '');
+  el.textContent = text || '';
+}
+
+function logLine(s) {
+  const el = $('log');
+  el.textContent += s + '\n';
+  if (el.textContent.length > 6000) el.textContent = el.textContent.slice(-4000);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ---------------------------------------------------------------------------
+// Sample pipeline
+// ---------------------------------------------------------------------------
+// Axis mapping: model X = sx · sensor[ix], model Y = sy · sensor[iy], Z unchanged.
+// GY-271 clones differ in chip placement, so the axis check measures this.
+function loadAxisMap() {
+  try {
+    const m = JSON.parse(localStorage.getItem('gy271AxisMap'));
+    if (m && [0, 1].includes(m.ix) && [0, 1].includes(m.iy) && m.ix !== m.iy) return m;
+  } catch {}
+  return { ix: 0, sx: 1, iy: 1, sy: 1 };
+}
+function saveAxisMap() {
+  try { localStorage.setItem('gy271AxisMap', JSON.stringify(S.axisMap)); } catch {}
+}
+// Calibration shared with other pages of this project (e.g. game_drone.html)
+function saveCalib() {
+  if (!S.hasBg || !S.M || S.source === 'demo') return;
+  try {
+    localStorage.setItem('gy271Calib', JSON.stringify({
+      bg: S.bg, M: S.M, pol: S.pol, h: +$('restH').value, side: +$('side').value,
+      kxy: +$('kxy').value, kz: +$('kz').value, rangeUT: S.rangeUT, t: Date.now() }));
+  } catch {}
+}
+function axisMapText() {
+  const m = S.axisMap, n = ['X', 'Y'];
+  return `model X = ${m.sx > 0 ? '+' : '−'}sensor ${n[m.ix]}, model Y = ${m.sy > 0 ? '+' : '−'}sensor ${n[m.iy]}`;
+}
+const bgSub = (b) => [b[0] - S.bg[0], b[1] - S.bg[1], b[2] - S.bg[2]];
+const mapAxes = (v) => [S.axisMap.sx * v[S.axisMap.ix], S.axisMap.sy * v[S.axisMap.iy], v[2]];
+const corrected = (b) => mapAxes(bgSub(b));
+
+function onSample(t, b, sat) {
+  S.raw = b; S.sat = sat; S.sampleCount++;
+  if (S.collect) {
+    const c = S.collect, v = c.fn(b);
+    for (let i = 0; i < 3; i++) { c.sum[i] += v[i]; c.sum2[i] += v[i] * v[i]; }
+    if (++c.n >= c.N) {
+      S.collect = null;
+      const mean = c.sum.map((v) => v / c.N);
+      const std = c.sum2.map((v, i) => Math.sqrt(Math.max(0, v / c.N - mean[i] ** 2)));
+      c.done({ mean, std });
+    }
+  }
+  const Bc = corrected(b);
+  const a = 1 - $('smooth').value / 100;
+  S.filt = S.filt ? S.filt.map((v, i) => v + a * (Bc[i] - v)) : Bc;
+  S.hist.push(Bc);
+  if (S.hist.length > 400) S.hist.shift();
+  if (S.rec && S.sol) {
+    const p = S.sol.p, u = S.sol.u;
+    S.recRows.push([t, ...b, ...S.filt, ...p, ...u, S.sol.fieldErr, sat ? 1 : 0, ...(S.force || [0, 0, 0])]
+      .map((v) => (typeof v === 'number' ? +v.toFixed(4) : v)).join(','));
+    $('recInfo').textContent = `${S.recRows.length} rows`;
+  }
+}
+
+// Average N samples after applying fn (raw, background-subtracted, …).
+function collectAverage(N, fn) {
+  return new Promise((done) => { S.collect = { N, n: 0, sum: [0, 0, 0], sum2: [0, 0, 0], fn, done }; });
+}
+
+// Forget background / moment, e.g. when switching between demo and the real sensor.
+function resetCalibration() {
+  S.bg = [0, 0, 0]; S.hasBg = false; S.detectUT = 3;
+  S.M = null; S.pol = 1; S.calibrated = false;
+  S.filt = null; S.x = null; S.sol = null; S.hist = []; S.collect = null; S.p0 = null; S.xF = null; S.forceP = null;
+  trailCount = 0; trailGeo.setDrawRange(0, 0);
+  setMsg('msgCal');
+  updateMomentInfo();
+}
+
+// ---------------------------------------------------------------------------
+// Serial (Web Serial API — Chrome / Edge)
+// ---------------------------------------------------------------------------
+async function connectSerial() {
+  if (S.source === 'serial') return disconnectSerial();
+  if (!('serial' in navigator)) {
+    setMsg('msgSerial', 'bad', 'Web Serial is not available. Use Chrome or Edge on desktop (file:// or localhost is fine).');
+    return;
+  }
+  try {
+    stopDemo();
+    const port = await navigator.serial.requestPort();
+    await port.open({ baudRate: +$('baud').value });
+    // ESP32 boards use DTR/RTS for reset and boot mode. Chrome asserts them on open,
+    // which can leave an ESP32-S3 in download mode (no data). Release DTR first,
+    // then RTS, so the chip boots (or keeps running) the normal firmware.
+    try {
+      await port.setSignals({ dataTerminalReady: false });
+      await port.setSignals({ requestToSend: false });
+    } catch {}
+    S.port = port; S.source = 'serial';
+    S.connectT = performance.now(); S.lastDataT = 0;
+    setConn('on', 'Connected');
+    setMsg('msgSerial');
+    $('btnConnect').textContent = 'Disconnect';
+    readLoop(port);
+    setTimeout(() => sendCmd('i\n'), 1200);
+  } catch (e) {
+    setMsg('msgSerial', 'bad', e.message);
+  }
+}
+
+async function sendCmd(s) {
+  if (!S.port?.writable) return;
+  const w = S.port.writable.getWriter();
+  try { await w.write(new TextEncoder().encode(s)); } finally { w.releaseLock(); }
+}
+
+async function readLoop(port) {
+  const decoder = new TextDecoder();
+  let buf = '';
+  while (port.readable && S.source === 'serial') {
+    S.reader = port.readable.getReader();
+    try {
+      for (;;) {
+        const { value, done } = await S.reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let i;
+        while ((i = buf.indexOf('\n')) >= 0) {
+          handleLine(buf.slice(0, i).trim());
+          buf = buf.slice(i + 1);
+        }
+      }
+    } catch (e) {
+      logLine('! ' + e.message);
+    } finally {
+      S.reader.releaseLock();
+    }
+  }
+}
+
+function handleLine(line) {
+  if (!line) return;
+  if (line.startsWith('B,')) {
+    const f = line.split(',');
+    if (f.length < 6) return;
+    const b = [+f[2], +f[3], +f[4]];
+    if (b.some(Number.isNaN)) return;
+    S.lastDataT = performance.now();
+    onSample(+f[1], b, f[5] === '1');
+  } else if (line.startsWith('#')) {
+    logLine(line);
+    const m = line.match(/chip=(\S+).*range=([^\n]*)/);
+    if (m) {
+      $('chipInfo').textContent = `Sensor: ${m[1]} · ${m[2]}`;
+      const r = m[2].match(/\((\d+)\s*uT\)/);
+      if (r) { S.rangeUT = +r[1]; updateMomentInfo(); }
+    }
+  }
+}
+
+async function disconnectSerial() {
+  S.source = null;
+  try { await S.reader?.cancel(); } catch {}
+  try { await S.port?.close(); } catch {}
+  S.port = null;
+  setConn('', 'Disconnected');
+  $('btnConnect').textContent = 'Connect serial';
+}
+
+function setConn(cls, text) {
+  $('dot').className = 'dot ' + cls;
+  $('connText').textContent = text;
+}
+
+// ---------------------------------------------------------------------------
+// Demo mode (simulated sensor, shows ground truth as a wireframe)
+// ---------------------------------------------------------------------------
+function startDemo() {
+  if (S.source === 'serial') disconnectSerial();
+  if (S.source === 'demo') return stopDemo();
+  S.source = 'demo';
+  setConn('demo', 'Demo (simulated)');
+  $('btnDemo').textContent = 'Stop demo';
+  $('chipInfo').textContent = 'Sensor: simulated · ±3000 µT';
+  S.rangeUT = 3000;
+  const earth = [21.5, -4.2, -38.7];
+  S.bg = earth.slice(); S.hasBg = true;
+  S.axisMap = { ix: 0, sx: 1, iy: 1, sy: 1 };   // simulated sensor is already in model axes
+  S.M = momentFromDims(); S.pol = 1; S.calibrated = false;
+  updateMomentInfo();
+  setMsg('msgCal', 'ok', 'Demo: background and moment preset. You can still run the calibration steps.');
+  const noise = () => (Math.random() + Math.random() + Math.random() - 1.5) * 0.5;
+  S.demoTimer = setInterval(() => {
+    S.demoT += 0.01;
+    const t = S.demoT, h = +$('restH').value, side = +$('side').value, mode = $('mode').value;
+    let p = [0, 0, h], u = [0, 0, 1];
+    if (mode !== 'tilt') p = [0.45 * h * Math.sin(0.7 * t), 0.35 * h * Math.sin(0.45 * t + 1), h * (1 + 0.25 * Math.sin(0.3 * t))];
+    else p = [0, 0, h * (1 + 0.15 * Math.sin(0.5 * t))];
+    if (mode !== 'pos') u = Solver.dirFromAB(0.5 * Math.sin(0.6 * t), 0.4 * Math.cos(0.37 * t), 1);
+    p[2] *= side;
+    S.demoTruth = { p, u };
+    const B = Solver.dipoleB(p, u, S.M);
+    const raw = B.map((v, i) => v + earth[i] + noise());
+    const sat = raw.some((v) => Math.abs(v) > S.rangeUT);
+    onSample(Math.round(t * 1000), raw.map((v) => Math.max(-S.rangeUT, Math.min(S.rangeUT, v))), sat);
+  }, 10);
+}
+
+function stopDemo() {
+  if (S.source !== 'demo') return;
+  clearInterval(S.demoTimer);
+  S.source = null; S.demoTruth = null;
+  S.rangeUT = 800;
+  S.axisMap = loadAxisMap();
+  $('chipInfo').textContent = 'Sensor: –';
+  resetCalibration();
+  setConn('', 'Disconnected');
+  $('btnDemo').textContent = 'Demo';
+}
+
+// ---------------------------------------------------------------------------
+// Calibration
+// ---------------------------------------------------------------------------
+async function captureBackground() {
+  if (!S.source) return setMsg('msgCal', 'bad', 'Connect first.');
+  setMsg('msgCal', 'warn', 'Capturing background… keep the magnet far away.');
+  const { mean, std } = await collectAverage(100, (b) => b);
+  S.bg = mean; S.hasBg = true; S.filt = null; S.x = null; S.sol = null;
+  // Detection threshold: well above the sensor noise so an absent magnet is never "found"
+  S.noiseUT = Math.max(0.05, Math.hypot(...std));
+  S.detectUT = Math.max(3, 6 * S.noiseUT);
+  updateMomentInfo();
+  setMsg('msgCal', 'ok', `Background (Earth + offsets) = (${mean.map((v) => v.toFixed(1)).join(', ')}) µT, ` +
+    `noise ${Math.hypot(...std).toFixed(2)} µT → magnet detected above ${S.detectUT.toFixed(1)} µT. ` +
+    `Don't move or rotate the sensor from now on. Next: place the magnet at the rest pose and run (b).`);
+}
+
+async function calibrateRest() {
+  if (!S.source) return setMsg('msgCal', 'bad', 'Connect first.');
+  if (!S.hasBg) return setMsg('msgCal', 'bad', 'Capture the background (a) first.');
+  setMsg('msgCal', 'warn', 'Measuring rest pose… hold still.');
+  const B0 = (await collectAverage(100, corrected)).mean;
+  const h = +$('restH').value, mag = Math.hypot(...B0);
+  if (mag < 5) return setMsg('msgCal', 'bad', `Field only ${mag.toFixed(1)} µT — magnet too far or missing.`);
+  if (S.sat) return setMsg('msgCal', 'bad', 'Sensor is saturated at this height — increase the rest height or use a smaller magnet.');
+  S.M = mag * h ** 3 / 2;
+  S.pol = B0[2] >= 0 ? 1 : -1;
+  S.calibrated = true; S.x = null; S.p0 = null;
+  const off = Math.hypot(B0[0], B0[1]) / Math.abs(B0[2]);
+  const Mest = momentFromDims();
+  updateMomentInfo();
+  setMsg('msgCal', off > 0.15 ? 'warn' : 'ok',
+    `|B| = ${mag.toFixed(0)} µT, north pole ${S.pol > 0 ? 'toward +Z' : 'toward −Z'}. ` +
+    `Moment = ${(S.M / Mest * 100).toFixed(0)}% of the datasheet estimate.` +
+    (off > 0.15 ? ` Off-axis ratio ${(off * 100).toFixed(0)}% — magnet not well centred; redo for best accuracy.` : '') +
+    ' Next: run (c) axis check once.');
+  saveCalib();
+}
+
+// Axis check: the magnet is placed beside the sensor toward the printed +X arrow,
+// then toward +Y (same height, face parallel). With the moment along ±Z, a magnet
+// at +X produces a horizontal field along +X × pol × side — so the dominant
+// horizontal sensor component and its sign reveal how the chip axes are mounted.
+async function axisCheck() {
+  if (!S.source) return setMsg('msgCal', 'bad', 'Connect first.');
+  if (!S.hasBg || !S.calibrated) return setMsg('msgCal', 'bad', 'Run (a) and (b) first — the check needs the magnet polarity.');
+  const h = +$('restH').value;
+  if (S.axisWizard === 0) {
+    S.axisWizard = 1;
+    $('btnAxis').textContent = 'Capture +X';
+    return setMsg('msgCal', 'warn', `Start from the rest pose (${h} mm straight above the chip) and slide the magnet ` +
+      `~${Math.round(h / 2)} mm toward the +X arrow printed on the GY-271, keeping the SAME height and the face level. ` +
+      `Hold still and click "Capture +X".`);
+  }
+  const { mean } = await collectAverage(60, bgSub);
+  const hz = [mean[0], mean[1]], i = Math.abs(hz[0]) >= Math.abs(hz[1]) ? 0 : 1;
+  const ratio = Math.abs(hz[i]) / (Math.abs(hz[1 - i]) + 1e-9);
+  if (Math.abs(hz[i]) < 3 * S.detectUT || ratio < 1.5) {
+    return setMsg('msgCal', 'bad', `Horizontal field unclear (${hz.map((v) => v.toFixed(1)).join(', ')} µT). ` +
+      'Move the magnet clearly sideways along the arrow, keep it level, and capture again.');
+  }
+  // The horizontal-field sign only identifies the axis direction when the magnet is
+  // clearly above (or below, per "Side") the chip plane. A magnet slid along the desk
+  // at chip height gives the opposite sign — detect that from Bz, which then reverses.
+  if (mean[2] * S.pol <= 0) {
+    return setMsg('msgCal', 'bad', 'Magnet is too low (near the chip plane or tilted) — Bz has reversed. ' +
+      'Keep it at the rest height and slide it only about half that distance sideways, then capture again.');
+  }
+  const sign = Math.sign(hz[i]) * S.pol * +$('side').value;
+  if (S.axisWizard === 1) {
+    S.axisCapX = { i, sign };
+    S.axisWizard = 2;
+    $('btnAxis').textContent = 'Capture +Y';
+    return setMsg('msgCal', 'warn', 'Got +X. Now place the magnet the same way toward the +Y arrow and click "Capture +Y".');
+  }
+  S.axisWizard = 0;
+  $('btnAxis').textContent = 'c) Axis check';
+  if (i === S.axisCapX.i) {
+    return setMsg('msgCal', 'bad', 'Both captures responded on the same sensor axis — check the arrow directions and redo (c).');
+  }
+  S.axisMap = { ix: S.axisCapX.i, sx: S.axisCapX.sign, iy: i, sy: sign };
+  saveAxisMap();
+  S.filt = null; S.x = null; S.sol = null;
+  updateAxisInfo();
+  setMsg('msgCal', 'ok', `Axis mapping saved: ${axisMapText()}.`);
+}
+
+function resetAxes() {
+  S.axisMap = { ix: 0, sx: 1, iy: 1, sy: 1 }; S.axisWizard = 0;
+  saveAxisMap(); S.filt = null; S.x = null;
+  $('btnAxis').textContent = 'c) Axis check';
+  updateAxisInfo();
+}
+
+function flipAxis(k) {
+  S.axisMap[k] *= -1;
+  saveAxisMap(); S.filt = null; S.x = null; S.sol = null;
+  updateAxisInfo();
+}
+
+function updateAxisInfo() { $('axisInfo').textContent = 'Axes: ' + axisMapText(); }
+
+// Re-zero with the magnet in place (e.g. embedded in silicone, no load): the
+// background is whatever the measurement contains beyond the dipole field of the
+// known rest pose. Needs the moment from an earlier (b) or the dimension estimate.
+async function rezeroAtRest() {
+  if (!S.source) return setMsg('msgCal', 'bad', 'Connect first.');
+  if (!S.M) return setMsg('msgCal', 'bad', 'Set the moment first: run (b) once, or press "Use estimate".');
+  setMsg('msgCal', 'warn', 'Re-zeroing… magnet at rest, no load, hold still.');
+  const { mean, std } = await collectAverage(100, (b) => b);
+  const c = cfg();
+  const Bm = Solver.dipoleB([0, 0, c.side * c.h], [0, 0, S.pol], S.M);   // model axes
+  // model → sensor axes (inverse of mapAxes)
+  const Bs = [0, 0, Bm[2]];
+  Bs[S.axisMap.ix] = S.axisMap.sx * Bm[0];
+  Bs[S.axisMap.iy] = S.axisMap.sy * Bm[1];
+  S.bg = mean.map((v, i) => v - Bs[i]); S.hasBg = true;
+  S.noiseUT = Math.max(0.05, Math.hypot(...std));
+  S.detectUT = Math.max(3, 6 * S.noiseUT);
+  S.filt = null; S.x = null; S.sol = null; S.p0 = null;
+  updateMomentInfo();
+  setMsg('msgCal', 'ok', `Re-zeroed: current reading is now the rest pose (0, 0, ${c.side * c.h} mm).`);
+  saveCalib();
+}
+
+// ---------------------------------------------------------------------------
+// 3D scene
+// ---------------------------------------------------------------------------
+const view = $('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+view.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0e1116);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.5, 5000);
+camera.up.set(0, 0, 1);
+camera.position.set(70, -95, 65);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0, 15);
+controls.enableDamping = true;
+controls.update();
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 0.8));
+const sun = new THREE.DirectionalLight(0xffffff, 0.7);
+sun.position.set(50, -40, 120);
+scene.add(sun);
+
+const grid = new THREE.GridHelper(200, 20, 0x3b4654, 0x232b35);
+grid.rotation.x = Math.PI / 2;
+scene.add(grid);
+
+// GY-271 board (approx. 14 × 13 mm) with the chip at the origin
+const board = new THREE.Mesh(new THREE.BoxGeometry(14, 13, 1.6),
+  new THREE.MeshStandardMaterial({ color: 0x1f5fbf, roughness: 0.7 }));
+board.position.z = -1.7;
+scene.add(board);
+const chipMesh = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 0.9),
+  new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.4 }));
+chipMesh.position.z = -0.45;
+scene.add(chipMesh);
+
+function makeLabel(text, color) {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.font = 'bold 42px system-ui, sans-serif'; g.fillStyle = color;
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, 32, 34);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false }));
+  s.scale.set(5, 5, 1);
+  return s;
+}
+[[1, 0, 0, 0xff6b6b, 'X'], [0, 1, 0, 0x51cf66, 'Y'], [0, 0, 1, 0x4dabf7, 'Z']].forEach(([x, y, z, col, t]) => {
+  const dir = new THREE.Vector3(x, y, z);
+  scene.add(new THREE.ArrowHelper(dir, new THREE.Vector3(), 18, col, 3, 1.6));
+  const l = makeLabel(t, '#' + col.toString(16).padStart(6, '0'));
+  l.position.copy(dir.multiplyScalar(22));
+  scene.add(l);
+});
+
+// Magnet: north half red, south half blue, oriented so local +Y = moment direction
+const magnet = new THREE.Group();
+const ghost = new THREE.Group();
+scene.add(magnet, ghost);
+const momentArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 10, 0xffd43b, 2.5, 1.5);
+magnet.add(momentArrow);
+
+function rebuildMagnetMesh() {
+  const d = +$('magD').value, t = +$('magT').value;
+  for (const g of [magnet, ghost]) {
+    g.children.filter((c) => c.userData.body).forEach((c) => { g.remove(c); c.geometry.dispose(); });
+  }
+  const geo = new THREE.CylinderGeometry(d / 2, d / 2, t / 2, 48);
+  const north = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xe03131, metalness: 0.4, roughness: 0.35 }));
+  const south = new THREE.Mesh(geo.clone(), new THREE.MeshStandardMaterial({ color: 0x1c7ed6, metalness: 0.4, roughness: 0.35 }));
+  north.position.y = t / 4; south.position.y = -t / 4;
+  north.userData.body = south.userData.body = true;
+  magnet.add(north, south);
+  const gw = new THREE.Mesh(new THREE.CylinderGeometry(d / 2, d / 2, t, 24),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.35 }));
+  gw.userData.body = true;
+  ghost.add(gw);
+  momentArrow.setLength(Math.max(8, d * 1.4), 2.5, 1.5);
+}
+
+// Drop line from magnet to the sensor plane
+const dropGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+const dropLine = new THREE.Line(dropGeo, new THREE.LineDashedMaterial({ color: 0x8b98a5, dashSize: 1.5, gapSize: 1.5 }));
+scene.add(dropLine);
+const foot = new THREE.Mesh(new THREE.RingGeometry(1.2, 1.7, 32), new THREE.MeshBasicMaterial({ color: 0x8b98a5, side: THREE.DoubleSide }));
+scene.add(foot);
+
+// Trail
+const TRAIL_N = 600;
+const trailPos = new Float32Array(TRAIL_N * 3);
+const trailGeo = new THREE.BufferGeometry();
+trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPos, 3));
+trailGeo.setDrawRange(0, 0);
+const trail = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ color: 0x4aa3ff, transparent: true, opacity: 0.7 }));
+scene.add(trail);
+let trailCount = 0;
+function pushTrail(p) {
+  if (trailCount === TRAIL_N) { trailPos.copyWithin(0, 3); trailCount--; }
+  trailPos.set(p, trailCount * 3);
+  trailCount++;
+  trailGeo.setDrawRange(0, trailCount);
+  trailGeo.attributes.position.needsUpdate = true;
+}
+
+// Measured field vector at the sensor (log-scaled length)
+const fieldArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(), 10, 0xf59f00, 3, 1.8);
+scene.add(fieldArrow);
+
+function setMagnetOpacity(o) {
+  magnet.children.forEach((c) => {
+    if (!c.userData.body) return;
+    c.material.transparent = o < 1;
+    c.material.opacity = o;
+  });
+}
+
+// Applied force, drawn as an arrow pushing on the top of the magnet
+const forceArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, -1), new THREE.Vector3(), 10, 0xe64980, 3.5, 2.2);
+forceArrow.visible = false;
+scene.add(forceArrow);
+
+// Spring model: F = k · (p − p0); shear and normal stiffness differ.
+function computeForce(p) {
+  const h = +$('restH').value, side = +$('side').value;
+  const p0 = S.p0 || [0, 0, side * h];
+  const kxy = +$('kxy').value, kz = +$('kz').value;
+  return [kxy * (p[0] - p0[0]), kxy * (p[1] - p0[1]), kz * (p[2] - p0[2])];
+}
+
+function updateForceArrow(p, F) {
+  const mag = Math.hypot(...F);
+  forceArrow.visible = $('showForce').checked && mag > 0.01;
+  if (!forceArrow.visible) return;
+  const dir = new THREE.Vector3(F[0], F[1], F[2]).normalize();
+  const len = Math.max(4, mag * +$('fScale').value);
+  // Tip touches the magnet's outer face (toward where the force comes from)
+  const tip = new THREE.Vector3(p[0], p[1], p[2]).addScaledVector(dir, -(+$('magT').value / 2 + 0.5));
+  forceArrow.position.copy(tip).addScaledVector(dir, -len);
+  forceArrow.setDirection(dir);
+  forceArrow.setLength(len, Math.min(3.5, len * 0.4), Math.min(2.2, len * 0.25));
+}
+
+const Y = new THREE.Vector3(0, 1, 0);
+function placeMagnet(group, p, u) {
+  group.position.set(p[0], p[1], p[2]);
+  group.quaternion.setFromUnitVectors(Y, new THREE.Vector3(u[0], u[1], u[2]).normalize());
+}
+
+function resize() {
+  const w = view.clientWidth, h = view.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(view);
+resize();
+
+// ---------------------------------------------------------------------------
+// Chart
+// ---------------------------------------------------------------------------
+const chart = $('chart'), cx = chart.getContext('2d');
+function drawChart() {
+  const dpr = devicePixelRatio || 1, w = chart.clientWidth, h = chart.clientHeight;
+  if (chart.width !== w * dpr) { chart.width = w * dpr; chart.height = h * dpr; }
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cx.clearRect(0, 0, w, h);
+  const H = S.hist;
+  if (H.length < 2) return;
+  let max = 10;
+  for (const b of H) for (const v of b) max = Math.max(max, Math.abs(v));
+  max *= 1.1;
+  cx.strokeStyle = '#2a333e'; cx.lineWidth = 1;
+  cx.beginPath(); cx.moveTo(0, h / 2); cx.lineTo(w, h / 2); cx.stroke();
+  ['#ff6b6b', '#51cf66', '#4dabf7'].forEach((col, k) => {
+    cx.strokeStyle = col; cx.lineWidth = 1.5; cx.beginPath();
+    H.forEach((b, i) => {
+      const x = (i / 399) * w, y = h / 2 - (b[k] / max) * (h / 2 - 3);
+      i ? cx.lineTo(x, y) : cx.moveTo(x, y);
+    });
+    cx.stroke();
+  });
+  $('chartScale').textContent = `±${max.toFixed(0)} µT`;
+}
+
+// ---------------------------------------------------------------------------
+// Main loop: solve once per frame on the latest filtered field
+// ---------------------------------------------------------------------------
+const fmt = (v, d = 1) => (v >= 0 ? '+' : '') + v.toFixed(d);
+let lastMode = null;
+
+function step() {
+  requestAnimationFrame(step);
+  controls.update();
+
+  const now = performance.now();
+  if (now - S.lastRateT > 1000) {
+    S.rate = S.sampleCount * 1000 / (now - S.lastRateT);
+    S.sampleCount = 0; S.lastRateT = now;
+    $('rate').textContent = S.source ? `${S.rate.toFixed(0)} Hz` : '';
+    // Connected but no samples: most often the ESP32 is stuck in download mode
+    if (S.source === 'serial' && now - Math.max(S.connectT, S.lastDataT) > 3000) {
+      setMsg('msgSerial', 'warn', 'Connected, but no data from the board. Press the RST button on the ESP32 ' +
+        '(not BOOT). If it still shows nothing, check the device log below for errors.');
+    } else if (S.source === 'serial') {
+      setMsg('msgSerial');
+    }
+  }
+
+  const mode = $('mode').value;
+  if (mode !== lastMode) { S.x = null; lastMode = mode; }
+
+  const B = S.filt;
+  let ready = false;
+  if (B) {
+    $('obx').textContent = fmt(B[0]); $('oby').textContent = fmt(B[1]); $('obz').textContent = fmt(B[2]);
+    const mag = Math.hypot(...B);
+    fieldArrow.visible = $('showField').checked && mag > 0.5;
+    if (mag > 0.5) {
+      fieldArrow.setDirection(new THREE.Vector3(B[0], B[1], B[2]).normalize());
+      fieldArrow.setLength(6 + 8 * Math.log10(1 + mag / 5), 3, 1.8);
+    }
+
+    if (!S.hasBg) setMsg('msgSolve', 'warn', 'Run calibration step (a) — background not captured yet.');
+    else if (!S.M) setMsg('msgSolve', 'warn', 'Run step (b) or press "Use estimate" to set the magnet moment.');
+    else if (S.sat) setMsg('msgSolve', 'bad', 'Sensor saturated — magnet too close. Estimate is unreliable.');
+    else if (mag < S.detectUT) setMsg('msgSolve', 'warn', `Magnet not detected (field < ${S.detectUT.toFixed(1)} µT).`);
+    else ready = true;
+
+    S.reliable = false;
+    if (ready) {
+      const c = cfg();
+      const sol = Solver.solve(S.x, mode, B, c);
+      S.x = sol.x;
+      const err = sol.fieldErr * 100;
+      // Poor fits are not drawn as a new pose: the last good pose is held (dimmed)
+      // instead of letting the magnet jump around.
+      if (err > 15) {
+        setMsg('msgSolve', 'warn', `Model fits poorly (${err.toFixed(0)}%) — holding last pose. ` +
+          `The magnet probably violates this mode's assumption (e.g. tilted in Position mode), or is too close.`);
+      } else {
+        S.sol = sol; S.reliable = true;
+        setMsg('msgSolve', err > 7 ? 'warn' : '', err > 7 ? `Fit ${err.toFixed(0)}% — estimate is approximate.` : '');
+      }
+      // Force always comes from the Position-mode solution: the equivalent x, y, z
+      // displacement that explains the field. In Height + Tilt mode the centre is pinned
+      // to the Z axis, so shear would show up only as tilt and Fx, Fy would stay 0.
+      if (mode === 'pos') {
+        if (S.reliable) S.forceP = sol.p;
+      } else {
+        const fs = Solver.solve(S.xF, 'pos', B, c);
+        S.xF = fs.x; S.forceP = fs.p;
+      }
+    }
+  }
+  drawChart();
+
+  // Show the pose while the magnet is detected; when saturated or poorly fitted keep the
+  // last good pose, dimmed. Hide it when no magnet is detected.
+  const show = !!(S.sol && B && S.hasBg && S.M && (ready || S.sat));
+  magnet.visible = dropLine.visible = foot.visible = show;
+  setMagnetOpacity(S.reliable ? 1 : 0.3);
+  if (!show) { forceArrow.visible = false; S.force = null; }
+  if (show) {
+    const { p, u } = S.sol;
+    const F = computeForce(S.forceP || p);
+    S.force = F;
+    updateForceArrow(p, F);
+    $('ofx').textContent = fmt(F[0], 2); $('ofy').textContent = fmt(F[1], 2); $('ofz').textContent = fmt(F[2], 2);
+    placeMagnet(magnet, p, u);
+    dropGeo.attributes.position.setXYZ(0, p[0], p[1], p[2]);
+    dropGeo.attributes.position.setXYZ(1, p[0], p[1], 0);
+    dropGeo.attributes.position.needsUpdate = true;
+    dropLine.computeLineDistances();
+    foot.position.set(p[0], p[1], 0.05);
+    if ($('showTrail').checked && S.reliable) pushTrail(p);
+    const tilt = Math.acos(Math.min(1, Math.abs(u[2]))) * 180 / Math.PI;
+    const az = Math.atan2(u[1] * Math.sign(u[2] || 1), u[0] * Math.sign(u[2] || 1)) * 180 / Math.PI;
+    $('ox').textContent = fmt(p[0]); $('oy').textContent = fmt(p[1]); $('oz').textContent = fmt(p[2]);
+    $('otilt').textContent = tilt.toFixed(1);
+    $('oaz').textContent = tilt < 0.5 ? '–' : az.toFixed(0);
+    $('ores').textContent = (S.sol.fieldErr * 100).toFixed(1) + '%';
+    $('hud').innerHTML =
+      `<b>pos</b> ${fmt(p[0])}, ${fmt(p[1])}, ${fmt(p[2])} mm<br>` +
+      `<b>axis</b> ${fmt(u[0], 2)}, ${fmt(u[1], 2)}, ${fmt(u[2], 2)}  (tilt ${tilt.toFixed(1)}°)<br>` +
+      `<b>|B|</b> ${Math.hypot(...B).toFixed(1)} µT · fit ${(S.sol.fieldErr * 100).toFixed(1)}%<br>` +
+      `<b style="color:#e64980">F</b> ${fmt(F[0], 2)}, ${fmt(F[1], 2)}, ${fmt(F[2], 2)} N  (|F| ${Math.hypot(...F).toFixed(2)} N)`;
+    if (S.source === 'demo')
+      $('hud').innerHTML = '<span style="color:var(--warn)">DEMO — simulated magnet, sensor not used</span><br>' + $('hud').innerHTML;
+  } else {
+    $('hud').textContent = S.source ? 'Waiting for calibration / magnet…' : 'No data — connect or start the demo';
+  }
+  trail.visible = $('showTrail').checked;
+
+  ghost.visible = !!S.demoTruth;
+  if (S.demoTruth) placeMagnet(ghost, S.demoTruth.p, S.demoTruth.u);
+
+  renderer.render(scene, camera);
+}
+
+// ---------------------------------------------------------------------------
+// UI wiring
+// ---------------------------------------------------------------------------
+const MODE_NOTES = {
+  pos: 'Assumes the magnet face stays parallel to the chip (no tilt). Solves x, y, z exactly from the 3 field components.',
+  tilt: 'Assumes the magnet centre stays on the sensor Z axis (e.g. embedded in a pad above the chip). Solves height and 2 tilt angles.',
+  full: 'One 3-axis sensor gives only 3 numbers, but position + tilt is 5 unknowns. A prior toward the rest pose picks the most plausible answer — expect cross-talk between translation and tilt. Use 2+ sensors for true 5-DOF.',
+};
+function updateModeUI() {
+  const m = $('mode').value;
+  $('modeNote').textContent = MODE_NOTES[m];
+  $('regRow').style.display = m === 'full' ? '' : 'none';
+}
+function updateSliders() {
+  $('regVal').textContent = cfg().reg.toFixed(2);
+  $('smoothVal').textContent = $('smooth').value + '%';
+}
+
+$('btnConnect').onclick = connectSerial;
+$('btnDemo').onclick = startDemo;
+$('btnBg').onclick = captureBackground;
+$('btnRest').onclick = calibrateRest;
+$('btnAxis').onclick = axisCheck;
+$('btnAxisReset').onclick = resetAxes;
+$('btnFlipX').onclick = () => flipAxis('sx');
+$('btnFlipY').onclick = () => flipAxis('sy');
+$('btnRezero').onclick = rezeroAtRest;
+$('btnZeroF').onclick = () => {
+  if (!S.sol || !S.reliable) return setMsg('msgSolve', 'warn', 'No reliable magnet pose to zero on.');
+  S.p0 = (S.forceP || S.sol.p).slice();
+};
+['restH', 'side'].forEach((id) => $(id).addEventListener('change', () => { S.p0 = null; }));
+$('btnUseDims').onclick = () => { S.M = momentFromDims(); S.calibrated = false; S.x = null; updateMomentInfo(); saveCalib(); };
+['kxy', 'kz'].forEach((id) => $(id).addEventListener('change', saveCalib));
+$('btnClearTrail').onclick = () => { trailCount = 0; trailGeo.setDrawRange(0, 0); };
+['magD', 'magT', 'magGrade'].forEach((id) => $(id).addEventListener('change', updateMomentInfo));
+['restH', 'side'].forEach((id) => $(id).addEventListener('change', () => { S.x = null; }));
+$('mode').addEventListener('change', updateModeUI);
+$('reg').addEventListener('input', updateSliders);
+$('smooth').addEventListener('input', updateSliders);
+$('btnRec').onclick = () => {
+  if (S.rec) { S.rec = null; $('btnRec').textContent = 'Start recording'; $('btnSave').disabled = !S.recRows.length; return; }
+  S.rec = true; S.recRows = [];
+  $('btnRec').textContent = 'Stop recording'; $('btnSave').disabled = true;
+};
+$('btnSave').onclick = () => {
+  const head = 't_ms,bx_raw,by_raw,bz_raw,bx,by,bz,px_mm,py_mm,pz_mm,ux,uy,uz,fit_err,saturated,fx_N,fy_N,fz_N';
+  const blob = new Blob([head + '\n' + S.recRows.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `magnet_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+navigator.serial?.addEventListener('disconnect', () => { if (S.source === 'serial') disconnectSerial(); });
+
+updateModeUI();
+updateSliders();
+updateAxisInfo();
+updateMomentInfo();
+step();
+</script>
+</body>
+</html>
